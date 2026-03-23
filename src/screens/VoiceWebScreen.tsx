@@ -131,6 +131,12 @@ export default function VoiceWebScreen({ onClose }: Props) {
   return (
     <View style={styles.safe}>
       <View style={styles.webWrap}>
+        <View style={styles.floatingTopBar} pointerEvents="box-none">
+          <TouchableOpacity onPress={onClose} style={styles.floatingBtn} accessibilityLabel="Close voice">
+            <Ionicons name="close" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.floatingSpacer} />
+        </View>
         {voiceBrief !== null ? (
         <WebView
           ref={webRef}
@@ -264,6 +270,30 @@ const styles = StyleSheet.create({
   webWrap: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  floatingTopBar: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 10 : 8,
+    left: 10,
+    right: 10,
+    zIndex: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  floatingBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  floatingSpacer: {
+    width: 40,
+    height: 40,
   },
   webview: {
     flex: 1,

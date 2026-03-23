@@ -110,10 +110,77 @@ Title:`;
   /** Compact context for Mediva Voice (WebView) — merged into Gemini Live instructions */
   async getVoiceBriefForUser(userId: string): Promise<{ brief: string }> {
     try {
-      const ctx = await this.patientContextService.buildCompleteContext(userId);
+      const withTimeout = async <T>(task: Promise<T>, ms: number, fallback: T): Promise<T> => {
+        return await Promise.race([
+          task,
+          new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+        ]);
+      };
+      const fallbackCtx: CompletePatientContext = {
+        demographics: {
+          name: 'Unknown',
+          age: null,
+          gender: 'unknown',
+          location: 'unknown',
+          bloodType: undefined,
+        },
+        healthHistory: {
+          allergies: [],
+          chronicConditions: [],
+          currentMedications: [],
+          pastSurgeries: [],
+          familyHistory: [],
+          lifestyleFactors: { smoking: false, alcohol: false, exercise: 'unknown' },
+        },
+        wearableData: {
+          heartRate: null,
+          bloodPressure: null,
+          bloodGlucose: null,
+          spo2: null,
+          sleep: null,
+          steps: null,
+          weight: null,
+          hrv: null,
+          lastSynced: null,
+          sources: [],
+        },
+        trends: {
+          heartRateTrend: 'unknown',
+          bloodGlucoseTrend: 'unknown',
+          weightTrend: 'unknown',
+          sleepQualityTrend: 'unknown',
+        },
+        abdmRecords: {
+          conditions: [],
+          medications: [],
+          labResults: [],
+          procedures: [],
+          immunizations: [],
+          lastFetched: null,
+        },
+        uploadedRecords: {
+          documents: [],
+          extractedData: { diagnoses: [], medications: [], labResults: [] },
+        },
+        activePrescriptions: [],
+        recentHealthConcerns: [],
+        insights: {
+          hiddenDiagnoses: [],
+          careGaps: [],
+          riskFactors: [],
+          proactiveAlerts: [],
+        },
+        contextBuiltAt: new Date(),
+        dataCompleteness: 0,
+      };
+      const ctx = await withTimeout(
+        this.patientContextService.buildCompleteContext(userId).catch(() => fallbackCtx),
+        3500,
+        fallbackCtx,
+      );
       const [alerts, illness] = await Promise.all([
-        this.predictiveAnalytics.generatePredictiveAlerts(userId).catch(() => []),
-        this.predictiveAnalytics.detectEarlyIllnessSigns(userId).catch(() => null),
+        withTimeout(this.predictiveAnalytics.generatePredictiveAlerts(userId).catch(() => []), 2500, [] as any[]),
+        withTimeout(this.predictiveAnalytics.detectEarlyIllnessSigns(userId).catch(() => null), 2500, null as any),
       ]);
       const wearable = ctx.wearableData;
       const lines: string[] = [
