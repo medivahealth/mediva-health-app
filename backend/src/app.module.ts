@@ -17,8 +17,10 @@ import { ContextModule } from './context/context.module';
 import { PrescriptionModule } from './prescription/prescription.module';
 import { LabModule } from './lab/lab.module';
 import { PharmacyModule } from './pharmacy/pharmacy.module';
+import { HealthzController } from './healthz.controller';
 
 @Module({
+  controllers: [HealthzController],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
