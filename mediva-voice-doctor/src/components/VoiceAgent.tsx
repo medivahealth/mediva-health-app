@@ -82,6 +82,7 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sessionRef = useRef<any>(null);
+  const liveOpenRef = useRef(false);
   const audioQueueRef = useRef<Int16Array[]>([]);
   const isPlayingRef = useRef(false);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,18 +107,23 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
       processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
       processorRef.current.onaudioprocess = (e) => {
-        if (isMutedRef.current || !sessionRef.current) return;
+        if (isMutedRef.current || !sessionRef.current || !liveOpenRef.current) return;
         const inputData = e.inputBuffer.getChannelData(0);
         const pcmData = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           pcmData[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
         }
-        sessionRef.current.sendRealtimeInput({
-          media: {
-            data: int16PcmToBase64(pcmData),
-            mimeType: 'audio/pcm;rate=16000',
-          },
-        });
+        try {
+          sessionRef.current.sendRealtimeInput({
+            media: {
+              data: int16PcmToBase64(pcmData),
+              mimeType: 'audio/pcm;rate=16000',
+            },
+          });
+        } catch {
+          // Session may close asynchronously while mic callback is still running.
+          liveOpenRef.current = false;
+        }
       };
 
       source.connect(processorRef.current);
@@ -159,6 +165,7 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
   const connectToGemini = async () => {
     // Close existing session if any
     if (sessionRef.current) {
+      liveOpenRef.current = false;
       sessionRef.current.close();
     }
 
@@ -214,6 +221,7 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
       },
       callbacks: {
         onopen: () => {
+          liveOpenRef.current = true;
           if (connectTimeoutRef.current) {
             clearTimeout(connectTimeoutRef.current);
             connectTimeoutRef.current = null;
@@ -274,6 +282,8 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
           }
         },
         onerror: (err: unknown) => {
+          liveOpenRef.current = false;
+          sessionRef.current = null;
           console.error('Live API error:', err);
           if (connectTimeoutRef.current) {
             clearTimeout(connectTimeoutRef.current);
@@ -289,6 +299,8 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
           setIsConnecting(false);
         },
         onclose: () => {
+          liveOpenRef.current = false;
+          sessionRef.current = null;
           if (connectTimeoutRef.current) {
             clearTimeout(connectTimeoutRef.current);
             connectTimeoutRef.current = null;
@@ -308,6 +320,7 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
       console.error('Failed to connect Live session:', e);
       setConfigError(`Failed to start voice: ${msg}`);
       setIsConnecting(false);
+      liveOpenRef.current = false;
       sessionRef.current = null;
     }
   };
@@ -319,6 +332,7 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
         clearTimeout(connectTimeoutRef.current);
         connectTimeoutRef.current = null;
       }
+      liveOpenRef.current = false;
       sessionRef.current?.close();
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());

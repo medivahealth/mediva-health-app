@@ -24,6 +24,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/hfufibfuvive/ffie@" element={<AdminLoginPage />} />
       <Route path="/join" element={<JoinAsDoctorPage />} />
       <Route
