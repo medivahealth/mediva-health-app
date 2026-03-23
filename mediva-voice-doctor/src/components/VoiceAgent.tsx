@@ -63,6 +63,23 @@ function useIsNarrow(maxWidth = 640) {
   return narrow;
 }
 
+function notifyEmbedClose(onClose: () => void, embed: boolean) {
+  if (!embed) {
+    onClose();
+    return;
+  }
+  try {
+    const w = window as unknown as { ReactNativeWebView?: { postMessage: (msg: string) => void } };
+    if (w.ReactNativeWebView?.postMessage) {
+      w.ReactNativeWebView.postMessage('MEDIVA_VOICE_CLOSE');
+      return;
+    }
+  } catch {
+    // Fall through to direct close callback.
+  }
+  onClose();
+}
+
 export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) {
   const [configError, setConfigError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
@@ -403,7 +420,15 @@ export default function VoiceAgent({ onClose, embed = false }: VoiceAgentProps) 
       )}
 
       {embed && (
-        <div className="absolute right-3 top-[max(0.5rem,env(safe-area-inset-top))] z-[55] sm:right-4">
+        <div className="absolute left-3 right-3 top-[max(0.5rem,env(safe-area-inset-top))] z-[55] flex items-center justify-between sm:left-4 sm:right-4">
+          <button
+            type="button"
+            onClick={() => notifyEmbedClose(onClose, embed)}
+            className="rounded-full p-2 transition-colors hover:bg-white/10 min-h-[40px] min-w-[40px] flex items-center justify-center opacity-80"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
           <button
             type="button"
             onClick={() => setShowSettings(true)}

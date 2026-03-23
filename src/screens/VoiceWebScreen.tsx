@@ -145,6 +145,11 @@ export default function VoiceWebScreen({ onClose }: Props) {
             setLoadError(null);
           }}
           onLoadEnd={() => setLoading(false)}
+          onMessage={(e) => {
+            if (e.nativeEvent.data === 'MEDIVA_VOICE_CLOSE') {
+              onClose();
+            }
+          }}
           onHttpError={(e) => handleError(`HTTP ${e.nativeEvent.statusCode}`)}
           onError={(e) => handleError(e.nativeEvent.description || 'WebView error')}
           allowsInlineMediaPlayback
