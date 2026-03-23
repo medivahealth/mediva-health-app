@@ -1,0 +1,7 @@
+{
+  "name": "Mediva Voice Doctor",
+  "description": "A professional medical voice assistant capable of conversing in multiple Indian languages with a doctor persona.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

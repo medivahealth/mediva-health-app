@@ -1,0 +1,48 @@
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
+index 251939e..c98f1dc 100644
+--- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
+@@ -19,6 +19,7 @@ import androidx.annotation.RequiresApi;
+ import androidx.core.util.Pair;
+ 
+ import com.facebook.common.logging.FLog;
++import com.facebook.react.common.build.ReactBuildConfig;
+ import com.facebook.react.bridge.Arguments;
+ import com.facebook.react.bridge.ReactContext;
+ import com.facebook.react.bridge.ReadableArray;
+@@ -161,6 +162,12 @@ public class RNCWebViewClient extends WebViewClient {
+ 
+     @Override
+     public void onReceivedSslError(final WebView webView, final SslErrorHandler handler, final SslError error) {
++        // LAN dev HTTPS (e.g. Vite + @vitejs/plugin-basic-ssl): WebView rejects self-signed certs by default.
++        // Proceed only in debug builds so release APKs/AABs keep strict SSL verification.
++        if (ReactBuildConfig.DEBUG) {
++            handler.proceed();
++            return;
++        }
+         // onReceivedSslError is called for most requests, per Android docs: https://developer.android.com/reference/android/webkit/WebViewClient#onReceivedSslError(android.webkit.WebView,%2520android.webkit.SslErrorHandler,%2520android.net.http.SslError)
+         // WebView.getUrl() will return the top-level window URL.
+         // If a top-level navigation triggers this error handler, the top-level URL will be the failing URL (not the URL of the currently-rendered page).
+diff --git a/node_modules/react-native-webview/apple/RNCWebViewImpl.m b/node_modules/react-native-webview/apple/RNCWebViewImpl.m
+index 7f5c24d..4a7e0d3 100644
+--- a/node_modules/react-native-webview/apple/RNCWebViewImpl.m
++++ b/node_modules/react-native-webview/apple/RNCWebViewImpl.m
+@@ -1182,6 +1182,18 @@ RCTAutoInsetsProtocol>
+       }
+     }
+   }
++#if DEBUG
++  // LAN dev HTTPS (Vite + @vitejs/plugin-basic-ssl): accept self-signed certs in debug only.
++  // Matches Android RNCWebViewClient SSL patch; release builds keep strict verification.
++  if ([[challenge protectionSpace] authenticationMethod] == NSURLAuthenticationMethodServerTrust) {
++    SecTrustRef serverTrust = [[challenge protectionSpace] serverTrust];
++    if (serverTrust != NULL) {
++      NSURLCredential *credential = [NSURLCredential credentialForTrust:serverTrust];
++      completionHandler(NSURLSessionAuthChallengeUseCredential, credential);
++      return;
++    }
++  }
++#endif
+   if ([[challenge protectionSpace] authenticationMethod] == NSURLAuthenticationMethodHTTPBasic) {
+     NSString *username = [_basicAuthCredential valueForKey:@"username"];
+     NSString *password = [_basicAuthCredential valueForKey:@"password"];

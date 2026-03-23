@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "Mediva",
+    "slug": "mediva-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/applogo1.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/applogo1.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "web": {
+      "favicon": "./assets/applogo1.png"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.medivaai.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSMicrophoneUsageDescription": "Mediva Voice needs the microphone so you can speak with the AI doctor in the voice session.",
+        "NSHealthShareUsageDescription": "Mediva AI reads your health data from Apple Watch and HealthKit to show personalized insights, track metrics, and provide AI-powered health recommendations.",
+        "NSHealthUpdateUsageDescription": "Mediva AI can save workout and health data to your Health app."
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": [
+          "health-records"
+        ],
+        "com.apple.developer.healthkit.background-delivery": true
+      }
+    },
+    "plugins": [
+      [
+        "@kayzmann/expo-healthkit",
+        {
+          "healthShareUsageDescription": "Allow Mediva AI to read your health and workout data",
+          "healthUpdateUsageDescription": "Allow Mediva AI to save your workout data to the Health app"
+        }
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-audio"
+    ],
+    "scheme": "mediva-ai",
+    "android": {
+      "package": "com.medivaai.app",
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/applogo1.png",
+        "backgroundColor": "#000000"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "50c58423-a4e4-46e2-83ad-b76e285e5029"
+      }
+    }
+  }
+}
