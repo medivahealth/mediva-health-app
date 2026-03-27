@@ -67,7 +67,7 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
   const [configError, setConfigError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
   const [connectingStage, setConnectingStage] = useState<string>('Initializing...');
-  const [status, setStatus] = useState<'connecting' | 'unifying' | 'ready' | 'user talks' | 'ai response'>('connecting');
+  const [status, setStatus] = useState<'connecting' | 'ready' | 'user talks' | 'ai response'>('connecting');
   const [isMuted, setIsMuted] = useState(false);
   const isMutedRef = useRef(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -266,32 +266,12 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
             connectTimeoutRef.current = null;
           }
           
-          // Simulate brief unification stages
-          const stages = [
-            'Connecting to Dr. Mediva...',
-            'Syncing your health data...',
-            'Analyzing your profile...',
-            'Ready for consultation',
-          ];
-          
-          let stageIndex = 0;
-          setConnectingStage(stages[0]);
-          setStatus('unifying');
-          
-          const stageInterval = setInterval(() => {
-            stageIndex++;
-            if (stageIndex < stages.length - 1) {
-              setConnectingStage(stages[stageIndex]);
-            } else {
-              clearInterval(stageInterval);
-              setConnectingStage('');
-              setIsConnecting(false);
-              setStatus('ready');
-              if (!audioContextRef.current) {
-                initializeAudio();
-              }
-            }
-          }, 600);
+          setConnectingStage('Connecting to Dr. Mediva...');
+          setIsConnecting(false);
+          setStatus('ready');
+          if (!audioContextRef.current) {
+            initializeAudio();
+          }
         },
         onmessage: async (message: LiveServerMessage) => {
           // Detect user speech from transcription if available
@@ -431,12 +411,12 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
     isMutedRef.current = nextMuted;
   };
 
-  const docked = settings.subtitles && !!aiTranscript && status !== 'connecting' && status !== 'unifying';
+  const docked = settings.subtitles && !!aiTranscript && status !== 'connecting';
   const bubbleGlowClass = isMuted
     ? 'talk-bubble-wrap--muted'
     : status === 'ai response'
       ? 'talk-bubble-wrap--active'
-      : status === 'connecting' || status === 'unifying'
+      : status === 'connecting'
         ? 'talk-bubble-wrap--connecting'
         : 'talk-bubble-wrap--idle';
 
@@ -491,7 +471,7 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden px-3 pt-2 sm:px-5 sm:pt-4 md:px-8 md:pt-8">
         <div className="flex max-h-[min(36vh,240px)] min-h-0 shrink-0 flex-col items-center overflow-y-auto overscroll-contain sm:max-h-[min(42vh,320px)] md:max-h-none">
           <AnimatePresence mode="wait">
-            {(status === 'connecting' || status === 'unifying') && (
+            {status === 'connecting' && (
               <motion.div
                 key="connecting"
                 initial={{ opacity: 0, y: -12 }}
@@ -511,7 +491,7 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
                 </p>
               </motion.div>
             )}
-            {settings.subtitles && aiTranscript && status !== 'connecting' && status !== 'unifying' && (
+            {settings.subtitles && aiTranscript && status !== 'connecting' && (
               <motion.div
                 key="transcript"
                 initial={{ opacity: 0, y: -12 }}
@@ -551,7 +531,7 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
                         ? [1, 1.045, 1]
                         : status === 'user talks'
                           ? [1, 1.03, 1]
-                          : status === 'connecting' || status === 'unifying'
+                          : status === 'connecting'
                             ? [1, 1.025, 1]
                             : [1, 1.018, 1],
                     x: 0,
@@ -562,7 +542,7 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
               docked
                 ? { type: 'spring', damping: 28, stiffness: 140 }
                 : {
-                    duration: status === 'ai response' ? 1.65 : status === 'connecting' || status === 'unifying' ? 1.8 : 2.4,
+                    duration: status === 'ai response' ? 1.65 : status === 'connecting' ? 1.8 : 2.4,
                     repeat: Infinity,
                     ease: 'easeInOut',
                   }
@@ -601,7 +581,7 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
               : isConnecting 
                 ? connectingStage 
                 : status === 'ready' 
-                  ? 'Tap mic and start talking' 
+                  ? 'Say something' 
                   : 'Listening'}
           </span>
           
@@ -614,17 +594,17 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
                   height: 
                     status === 'ai response' 
                       ? [8, 16, 8] 
-                      : status === 'connecting' || status === 'unifying'
+                      : status === 'connecting'
                         ? [6, 10, 6]
                         : 8,
                   opacity:
-                    status === 'connecting' || status === 'unifying'
+                    status === 'connecting'
                       ? [0.4, 1, 0.4]
                       : 1,
                 }}
                 transition={{
                   repeat: Infinity,
-                  duration: status === 'connecting' || status === 'unifying' ? 1 : 0.5,
+                  duration: status === 'connecting' ? 1 : 0.5,
                   delay: i * 0.1,
                 }}
                 className="w-0.5 bg-white/40 rounded-full"

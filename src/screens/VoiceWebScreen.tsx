@@ -51,8 +51,8 @@ export default function VoiceWebScreen({ onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [micDenied, setMicDenied] = useState(false);
-  /** null = still fetching /chat/voice-brief; string = ready (may be empty) */
-  const [voiceBrief, setVoiceBrief] = useState<string | null>(null);
+  /** Voice context is loaded in background; WebView should open immediately. */
+  const [voiceBrief, setVoiceBrief] = useState<string>('');
   const webRef = useRef<WebView>(null);
 
   // Prime native mic permission (Android especially); WKWebView still requires https for getUserMedia on iOS.
@@ -72,22 +72,32 @@ export default function VoiceWebScreen({ onClose }: Props) {
     })();
   }, [uri]);
 
-  // Load unified patient + monitoring context before WebView runs (Gemini reads window.__MEDIVA_VOICE_BRIEF__)
+  // Load unified patient + monitoring context in background.
   useEffect(() => {
     if (!uri) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await api.get<{ brief: string }>('/chat/voice-brief');
-        if (!cancelled) setVoiceBrief(typeof res?.brief === 'string' ? res.brief : '');
+        if (!cancelled && typeof res?.brief === 'string') {
+          setVoiceBrief(res.brief);
+        }
       } catch {
-        if (!cancelled) setVoiceBrief('');
+        // Keep voice flow uninterrupted when brief is unavailable.
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [uri]);
+
+  // Inject/update context after load as well (non-blocking).
+  useEffect(() => {
+    if (!webRef.current || !voiceBrief) return;
+    webRef.current.injectJavaScript(
+      `(function(){try{window.__MEDIVA_VOICE_BRIEF__=${JSON.stringify(voiceBrief)};}catch(e){}})(); true;`,
+    );
+  }, [voiceBrief]);
 
   // No on-screen close button — Android back returns to chat.
   useEffect(() => {
@@ -137,10 +147,7 @@ export default function VoiceWebScreen({ onClose }: Props) {
     );
   }
 
-  const voiceBriefBootstrap =
-    voiceBrief === null
-      ? ''
-      : `(function(){try{window.__MEDIVA_VOICE_BRIEF__=${JSON.stringify(voiceBrief)};}catch(e){}})();`;
+  const voiceBriefBootstrap = `(function(){try{window.__MEDIVA_VOICE_BRIEF__=${JSON.stringify(voiceBrief)};}catch(e){}})();`;
 
   return (
     <View style={styles.safe}>
@@ -151,7 +158,6 @@ export default function VoiceWebScreen({ onClose }: Props) {
           </TouchableOpacity>
           <View style={styles.floatingSpacer} />
         </View>
-        {voiceBrief !== null ? (
         <WebView
           ref={webRef}
           source={
@@ -189,17 +195,11 @@ export default function VoiceWebScreen({ onClose }: Props) {
             : {})}
           injectedJavaScriptBeforeContentLoaded={`${voiceBriefBootstrap}\n${injectedViewport}`}
         />
-        ) : (
-          <View style={styles.briefLoading} pointerEvents="none">
-            <ActivityIndicator size="large" color="#fff" />
-            <Text style={styles.loadingText}>Preparing your health context…</Text>
-          </View>
-        )}
 
-        {loading && !loadError && voiceBrief !== null && (
+        {loading && !loadError && (
           <View style={styles.loadingOverlay} pointerEvents="none">
             <ActivityIndicator size="large" color="#fff" />
-            <Text style={styles.loadingText}>Loading voice…</Text>
+            <Text style={styles.loadingText}>Connecting…</Text>
           </View>
         )}
 
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   floatingTopBar: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 10 : 8,
+    top: Platform.OS === 'ios' ? 18 : 14,
     left: 10,
     right: 10,
     zIndex: 20,
@@ -348,12 +348,6 @@ const styles = StyleSheet.create({
   webview: {
     flex: 1,
     backgroundColor: '#000',
-  },
-  briefLoading: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
