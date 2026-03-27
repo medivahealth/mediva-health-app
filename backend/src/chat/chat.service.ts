@@ -372,6 +372,29 @@ Title (in English only):`;
     emitChatSessionUpdate({ sessionId, userId });
   }
 
+  /**
+   * Keep ongoing medical conversations in-context for short follow-up replies
+   * like "10", "yes", "no", etc. (e.g., depression severity scales).
+   */
+  private shouldTreatAsMedicalFollowUp(message: string, session: ChatSession): boolean {
+    const text = message.trim().toLowerCase();
+    const isShortAnswer =
+      /^(10|[0-9]|yes|no|y|n|okay|ok|sure|not sure|idk|i don't know)$/i.test(text) ||
+      text.length <= 6;
+
+    if (!isShortAnswer) return false;
+
+    const recent = (session.messages || []).slice(-8);
+    const combined = recent.map((m: any) => String(m.content || '').toLowerCase()).join(' \n ');
+
+    const medicalContextPattern =
+      /\b(depress|anx|panic|stress|sleep|mental|mood|suicid|self harm|therapy|counsel|symptom|pain|fever|bp|sugar|medication|medicine|diagnos)\b/i;
+    const scaleQuestionPattern =
+      /\b(1\s*[-to]{1,3}\s*10|rate|scale|severity|how severe|how bad)\b/i;
+
+    return medicalContextPattern.test(combined) || scaleQuestionPattern.test(combined);
+  }
+
   async sendMessage(
     userId: string,
     message: string,
@@ -1073,7 +1096,8 @@ RESPONSE FORMAT:
 
     // Query classification - check if it's medical
     const classification = await this.queryClassifier.classifyQuery(message);
-    if (!classification.isMedical && classification.confidence > 0.7) {
+    const isMedicalFollowUp = this.shouldTreatAsMedicalFollowUp(message, session);
+    if (!classification.isMedical && classification.confidence > 0.7 && !isMedicalFollowUp) {
       // Non-medical query - redirect
       session.messages.push({
         role: 'user',
