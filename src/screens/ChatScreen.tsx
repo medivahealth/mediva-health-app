@@ -1467,14 +1467,17 @@ In an emergency, call 112 immediately.              </Text>
         {/* Suggestions above the message composer - hide when attachments open */}
         {!showAttach && (
           <View style={s.bottomPromptsWrap}>
-            <TouchableOpacity
-              style={s.topDisclaimerBtn}
-              onPress={() => setShowDisclaimerPopup(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="information-circle-outline" size={12} color="#FFFFFF" />
-              <Text style={s.topDisclaimerText}>Disclaimer</Text>
-            </TouchableOpacity>
+            <View style={s.topMetaRow}>
+              <TouchableOpacity
+                style={s.topDisclaimerBtn}
+                onPress={() => setShowDisclaimerPopup(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="information-circle-outline" size={12} color="#FFFFFF" />
+                <Text style={s.topDisclaimerText}>Disclaimer</Text>
+              </TouchableOpacity>
+              <Text style={s.betaTagText}>Beta Early User</Text>
+            </View>
 
             <ScrollView
               horizontal
@@ -1611,24 +1614,37 @@ const s = StyleSheet.create({
     paddingBottom: 2,
     backgroundColor: '#000',
   },
+  topMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   topDisclaimerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 8,
     borderRadius: 4,
     borderWidth: 0,
     backgroundColor: 'transparent',
-    marginBottom: 4,
   },
   topDisclaimerText: {
     fontSize: 11,
     color: '#FFFFFF',
     fontFamily: 'HelveticaNeue-Light',
     fontWeight: '300',
+  },
+  betaTagText: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    fontFamily: 'HelveticaNeue-Light',
+    fontWeight: '300',
+    letterSpacing: 0.2,
+    paddingRight: 4,
   },
   topPromptsScroll: {
     gap: 8,
