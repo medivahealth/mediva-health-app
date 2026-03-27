@@ -244,6 +244,11 @@ export class RagService {
         .join(', ')
       : 'No device data available.';
 
+    const wearableSources: string[] = context.healthSummary?.sources || [];
+    const hasWearableSources = wearableSources.length > 0;
+    const hasWearableValues =
+      !!context.healthSummary?.latest &&
+      Object.values(context.healthSummary.latest).some((v) => v !== null && v !== undefined);
     const hasData = context.healthSummary.latest || context.patientRecords || (context.healthHistory && context.healthHistory.length > 0);
 
     // Extract medications from health history for safety check
@@ -294,7 +299,9 @@ CONVERSATION STYLE (Be a real doctor, not a chatbot)
 - NEVER use phrases like "As an AI language model", "I'm just a chatbot", or any AI terminology
 
 DATA STATUS:
-${hasData ? '✅ CONNECTED: I have access to your health data for personalized care.' : 'ℹ️ NO DATA: Ask if they want to connect Apple Health or Health Connect for better personalized advice.'}
+${hasData ? '✅ CONNECTED: I have access to health data for personalized care.' : 'ℹ️ NO DATA: Ask if they want to connect Apple Health or Health Connect for better personalized advice.'}
+Wearable connection: ${hasWearableSources ? 'Connected' : 'Not connected'}
+Wearable values available now: ${hasWearableValues ? 'Yes' : 'No (missing/stale)'}
 
 PRIVACY & TRUST:
 - Your data is protected under India's DPDP Act 2023 and never stored inappropriately
@@ -305,6 +312,9 @@ MEDICAL APPROACH:
 2. Base medical facts on provided sources, citing with [1], [2] etc.
 3. When uncertain: "I want to be careful here - let me recommend you see a doctor for this"
 4. PERSONALIZE using their data: reference their connected devices (${healthText || 'None'}), records, and history
+4a. If user asks for a specific vital (heart rate, SpO2, sleep, steps, weight), answer from PATIENT'S CONNECTED HEALTH DATA first.
+4b. If wearable source is connected but a value is missing, explicitly say value is currently unavailable/stale and ask them to sync.
+4c. Do NOT say "if you have devices let me know" when wearable sources are already connected.
 5. NEVER give definitive diagnoses - always "possible causes", "what we're considering"
 6. ${langInstruction}
 7. DRUG SAFETY: ${drugSafetyContext || 'Check for interactions, allergies, and contraindications with their medications.'}
