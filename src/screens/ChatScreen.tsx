@@ -809,6 +809,33 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
     clearChat();
   };
 
+  /* ─── Like / Dislike feedback on AI messages ─── */
+  const [feedbackMap, setFeedbackMap] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    const map: Record<number, string> = {};
+    messages.forEach((msg, idx) => {
+      if (msg.role === 'assistant' && msg.feedback) {
+        map[idx] = msg.feedback;
+      }
+    });
+    setFeedbackMap(map);
+  }, [messages.length]);
+
+  const handleFeedback = async (msgIndex: number, type: 'like' | 'dislike') => {
+    const current = feedbackMap[msgIndex] || '';
+    const next = current === type ? '' : type;
+    setFeedbackMap((prev) => ({ ...prev, [msgIndex]: next }));
+
+    if (!currentSessionId) return;
+    try {
+      const res = await chatService.messageFeedback(currentSessionId, msgIndex, type);
+      setFeedbackMap((prev) => ({ ...prev, [msgIndex]: res.feedback }));
+    } catch {
+      setFeedbackMap((prev) => ({ ...prev, [msgIndex]: current }));
+    }
+  };
+
   /* ─── Message Actions ─── */
   const sanitizeAiText = (text: string) => {
     return text
@@ -907,6 +934,29 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
               </Text>
             </View>
           )}
+        </View>
+
+        <View style={s.actionRow}>
+          <TouchableOpacity
+            style={s.actionBtn}
+            onPress={() => handleFeedback(idx, 'like')}
+          >
+            <Ionicons
+              name={(feedbackMap[idx] || msg.feedback) === 'like' ? 'thumbs-up' : 'thumbs-up-outline'}
+              size={16}
+              color="#9CA3AF"
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.actionBtn}
+            onPress={() => handleFeedback(idx, 'dislike')}
+          >
+            <Ionicons
+              name={(feedbackMap[idx] || msg.feedback) === 'dislike' ? 'thumbs-down' : 'thumbs-down-outline'}
+              size={16}
+              color="#9CA3AF"
+            />
+          </TouchableOpacity>
         </View>
 
       </View>
@@ -1684,6 +1734,19 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: "HelveticaNeue-Light",
+  },
+  actionRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+    paddingLeft: 2,
+    gap: 2,
+  },
+  actionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionDivider: {
     width: 1,
