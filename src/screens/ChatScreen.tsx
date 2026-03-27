@@ -1522,7 +1522,8 @@ const s = StyleSheet.create({
   topMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 10,
     marginBottom: 4,
   },
   topDisclaimerBtn: {
@@ -1549,7 +1550,6 @@ const s = StyleSheet.create({
     fontFamily: 'HelveticaNeue-Light',
     fontWeight: '300',
     letterSpacing: 0.2,
-    paddingRight: 4,
   },
   topPromptsScroll: {
     gap: 8,
