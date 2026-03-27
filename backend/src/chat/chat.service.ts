@@ -402,7 +402,7 @@ Title (in English only):`;
     session: ChatSession,
     intent: ClassifiedIntent,
     message: string,
-  ): Promise<{ text: string; severity: string } | null> {
+  ): Promise<{ created: boolean; pendingExists: boolean } | null> {
     if (!this.intentClassifier.canTriggerPrescription(intent)) return null;
 
     // Only create a prescription proposal when the user is explicitly asking about medicine/prescriptions.
@@ -417,32 +417,40 @@ Title (in English only):`;
     if (!sessionId) return null;
 
     const hasPending = await this.prescriptionService.hasActiveDraftForSession(sessionId);
-    if (hasPending) {
-      return {
-        text:
-          `I already have a prescription proposal under doctor review for this chat.\n` +
-          `Once verified, you'll see a "prescription ready" update here.`,
-        severity: 'LOW',
-      };
-    }
+    if (hasPending) return { created: false, pendingExists: true };
 
     const diagnosisHint =
       intent.type === 'prescription_request'
         ? 'Medication consultation'
         : 'Symptom-based clinical assessment';
-    const recommendation = await this.prescriptionService.generateRecommendation(
+    await this.prescriptionService.generateRecommendation(
       userId,
       message,
       diagnosisHint,
       sessionId,
     );
 
-    return {
-      text:
-        `I've prepared a prescription proposal for doctor verification.\n` +
-        `You'll get an in-app update here once it's approved.`,
-      severity: 'MEDIUM',
+    return { created: true, pendingExists: false };
+  }
+
+  private isPoliteAcknowledgement(message: string): boolean {
+    const text = message.trim().toLowerCase();
+    return /^(thank you|thanks|thanks doctor|ok|okay|got it|understood|noted|great|cool|ty|thx)[.! ]*$/i.test(text);
+  }
+
+  private generatePoliteReply(preferredLanguage: string): string {
+    const replies: Record<string, string[]> = {
+      en: [
+        "You're welcome. I'm here whenever you need me. If you want, we can quickly review your latest vitals next.",
+        "Glad I could help. If anything changes in your symptoms, message me right away and we'll adjust the plan.",
+        "Anytime. Take care, and keep me posted on how you're feeling over the next few hours.",
+      ],
+      hi: [
+        'आपका स्वागत है। जब भी ज़रूरत हो, मैं यहीं हूं। चाहें तो हम आपके लेटेस्ट vitals भी जल्दी से देख सकते हैं।',
+      ],
     };
+    const pool = replies[preferredLanguage] || replies.en;
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   async sendMessage(
@@ -772,6 +780,37 @@ If this isn't actually an emergency, please tell me more about what's happening 
     if (location) session.location = location; // Store recent location
     const startTime = Date.now();
 
+    if (this.isPoliteAcknowledgement(message) && session.messages.length > 0) {
+      const reply = this.generatePoliteReply(preferredLanguage);
+      session.messages.push({
+        role: 'user',
+        content: message,
+        modelUsed: '',
+        citations: [],
+        severity: '',
+        timestamp: new Date(),
+      } as any);
+      session.messages.push({
+        role: 'assistant',
+        content: reply,
+        modelUsed: 'conversation-politeness',
+        citations: [],
+        severity: 'LOW',
+        timestamp: new Date(),
+      } as any);
+      await session.save();
+      this.emitSessionUpdate(session);
+      return {
+        response: reply,
+        severity: 'LOW',
+        sessionId: session._id!.toString(),
+        requiresDoctorReview: false,
+        intent: { type: 'general_greeting', confidence: 0.95, entities: {}, reasoning: 'polite acknowledgement' },
+        contextCompleteness: undefined,
+        chatTitle: session.summary,
+      };
+    }
+
     // 1. Classify intent first
     const intent = await this.intentClassifier.classifyIntent(message);
     this.logger.log(`Intent classified: ${intent.type} (confidence: ${intent.confidence})`);
@@ -883,11 +922,13 @@ If this isn't actually an emergency, please tell me more about what's happening 
     const rawResponse = await this.openRouter.chat(llmMessages, modelTier);
     const response = this.appendNearbyHospitals(rawResponse, nearbyHospitals);
     const proposal = await this.maybeCreatePrescriptionProposal(userId, session, intent, message).catch(() => null);
-    const finalResponse = proposal ? `${response}\n\n${proposal.text}` : response;
-    const severity = proposal?.severity || this.ragService.parseSeverity(finalResponse);
+    const finalResponse = response;
+    const severity = this.ragService.parseSeverity(finalResponse);
     const requiresDoctorReview = this.intentClassifier.requiresDoctorReview(intent) || 
                                   severity === 'HIGH' || 
-                                  severity === 'EMERGENCY';
+                                  severity === 'EMERGENCY' ||
+                                  proposal?.created === true ||
+                                  proposal?.pendingExists === true;
 
     // 8. Add assistant message
     session.messages.push({
@@ -1031,6 +1072,7 @@ RULES:
 7. Keep responses concise but thorough
 8. Ask ONE relevant follow-up question to understand the patient better
 9. For vague complaints (feeling low, tired, stressed, anxious), connect sleep, activity, vitals, and CONTINUOUS MONITORING / EARLY ILLNESS sections when present; be empathetic, avoid minimizing, and gently explore mood, stressors, support, and safety (including crisis resources if appropriate).
+10. Appointment scheduling is not currently available in-app. Do not suggest "book/schedule appointment" inside the app. Instead, suggest continuing chat, doctor review loop, or nearby in-person care when needed.
 
 RESPONSE FORMAT:
 <!-- SEVERITY: LOW/MEDIUM/HIGH/EMERGENCY -->
@@ -1101,6 +1143,43 @@ RESPONSE FORMAT:
   ): AsyncGenerator<{ type: string; data: string }> {
     const session = await this.getOrCreateSession(userId, sessionId);
     if (location) session.location = location;
+
+    if (this.isPoliteAcknowledgement(message) && session.messages.length > 0) {
+      const reply = this.generatePoliteReply(preferredLanguage);
+      session.messages.push({
+        role: 'user',
+        content: message,
+        modelUsed: '',
+        citations: [],
+        severity: '',
+        timestamp: new Date(),
+      } as any);
+      const currentSessionId = session._id!.toString();
+      yield { type: 'session', data: currentSessionId };
+      for (const char of reply) {
+        yield { type: 'token', data: char };
+      }
+      session.messages.push({
+        role: 'assistant',
+        content: reply,
+        modelUsed: 'conversation-politeness',
+        citations: [],
+        severity: 'LOW',
+        timestamp: new Date(),
+      } as any);
+      await session.save();
+      this.emitSessionUpdate(session);
+      yield {
+        type: 'done',
+        data: JSON.stringify({
+          severity: 'LOW',
+          requiresDoctorReview: false,
+          sessionId: currentSessionId,
+          chatTitle: session.summary,
+        }),
+      };
+      return;
+    }
 
     // Check for simple greeting and return friendly response directly
     const isGreeting = /^(hi|hello|hey|good morning|good evening|good afternoon|how are you|what's up|sup)$/i.test(message.trim());
@@ -1416,13 +1495,12 @@ If this isn't actually an emergency, please tell me more about what's happening 
 
     fullResponse = this.appendNearbyHospitals(fullResponse, nearbyHospitals);
     const proposal = await this.maybeCreatePrescriptionProposal(userId, session, intent, message).catch(() => null);
-    if (proposal?.text) {
-      const suffix = `\n\n${proposal.text}`;
-      fullResponse += suffix;
-      yield { type: 'token', data: suffix };
-    }
-    const severity = proposal?.severity || this.ragService.parseSeverity(fullResponse);
-    const requiresDoctorReview = severity === 'HIGH' || severity === 'EMERGENCY';
+    const severity = this.ragService.parseSeverity(fullResponse);
+    const requiresDoctorReview =
+      severity === 'HIGH' ||
+      severity === 'EMERGENCY' ||
+      proposal?.created === true ||
+      proposal?.pendingExists === true;
 
     const assistantMessage = {
       role: 'assistant',

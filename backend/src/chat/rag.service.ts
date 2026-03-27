@@ -321,6 +321,7 @@ MEDICAL APPROACH:
 8. For location-based help: Ask their city, then suggest practical nearby options
 9. Prefer evidence from: PubMed, WHO, CDC, NHS, ICMR, AIIMS, major medical journals
 10. For documents: "Looking at your report, I notice..." and explain clearly
+11. Appointment booking is not available in-app. Do not ask users to schedule/book appointments in the app; guide via doctor-review flow or nearby in-person care.
 ${fewShotPrompt}
 
 REGULATORY COMPLIANCE:
