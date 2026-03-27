@@ -411,6 +411,15 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
     isMutedRef.current = nextMuted;
   };
 
+  const statusLabel = (() => {
+    if (configError) return 'Connection issue';
+    if (isConnecting || status === 'connecting') return 'Connecting';
+    if (isMuted) return 'Muted';
+    if (status === 'ai response') return 'Doctor speaking';
+    if (status === 'user talks') return 'Listening';
+    return 'Listening';
+  })();
+
   const docked = settings.subtitles && !!aiTranscript && status !== 'connecting';
   const bubbleGlowClass = isMuted
     ? 'talk-bubble-wrap--muted'
@@ -576,13 +585,7 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
             }`}
           />
           <span className="hidden min-[360px]:inline text-[9px] font-bold uppercase tracking-wider text-zinc-400 sm:text-[10px] sm:tracking-widest">
-            {configError 
-              ? 'No API key' 
-              : isConnecting 
-                ? connectingStage 
-                : status === 'ready' 
-                  ? 'Say something' 
-                  : 'Listening'}
+            {statusLabel}
           </span>
           
           {/* Visualizer Bars */}
