@@ -105,7 +105,10 @@ function extractFollowUps(text: string): { body: string; followUps: string[] } {
 }
 
 function extractSourcesSection(text: string): { body: string; sourcesSection: string } {
-  const pattern = new RegExp('### Sources\\s*\\n([\\s\\S]*?)(?=\\n---|\\n### |\\n\\*\\*Related Questions|$)', 'i');
+  const pattern = new RegExp(
+    '(?:###|##)\\s*(?:Sources|Resources)\\s*\\n([\\s\\S]*?)(?=\\n---|\\n(?:###|##)\\s+|\\n\\*\\*Related Questions|$)',
+    'i',
+  );
   const match = text.match(pattern);
   if (match && match.index !== undefined) {
     const body = text.slice(0, match.index).trim();
@@ -195,17 +198,19 @@ export default function MarkdownRenderer({ content, onFollowUp, variant = 'defau
     codeText: { fontSize: 13, color: codeTextColor, fontFamily: 'monospace', lineHeight: 20 },
     hr: { height: 1, backgroundColor: border, marginVertical: 12 },
     sourcesSection: { marginTop: 12 },
-    sectionTitle: { fontSize: 12, fontWeight: '400', color: secondary, fontFamily: isChat ? 'HelveticaNeue' : FONTS.bold, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+    sectionTitle: { fontSize: 12, fontWeight: '400', color: isChat ? '#9CA3AF' : secondary, fontFamily: isChat ? 'HelveticaNeue' : FONTS.bold, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
     sourceChip: { 
       marginBottom: 8, 
-      backgroundColor: isChat ? '#1F2937' : '#FFFFFF',
-      borderRadius: 8,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      borderLeftWidth: 3,
-      borderLeftColor: COLORS.primary,
+      backgroundColor: isChat ? '#E5E7EB' : '#FFFFFF',
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderLeftWidth: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
     },
-    sourceCardTitle: { fontSize: 13, color: primary, fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, lineHeight: 18 },
+    sourceNumber: { width: 26, fontSize: 13, color: '#6B7280', fontFamily: isChat ? 'HelveticaNeue' : FONTS.bold, fontWeight: '700', lineHeight: 18 },
+    sourceCardTitle: { fontSize: 13, color: isChat ? '#111827' : primary, fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, lineHeight: 18, flex: 1 },
     followUpSection: { marginTop: 12, backgroundColor: isChat ? '#0B1220' : '#F5F5F5', borderRadius: 12, padding: 12 },
     followUpBtn: { backgroundColor: isChat ? '#1F2937' : '#FFFFFF', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6 },
     followUpText: { fontSize: SIZES.sm, color: primary, fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, lineHeight: 18 },
@@ -307,14 +312,17 @@ export default function MarkdownRenderer({ content, onFollowUp, variant = 'defau
       {sourceEntries.length > 0 && (
         <View style={styles.sourcesSection}>
           <Text style={styles.sectionTitle}>Resources</Text>
-          {sourceEntries.map(({ id, source }) => (
+          {sourceEntries.map(({ id, source }, idx) => (
             <TouchableOpacity 
               key={`src-${id}`} 
               style={styles.sourceChip}
               onPress={() => safeOpenUrl(source.url)}
               activeOpacity={0.7}
             >
-              <Text style={styles.sourceCardTitle} numberOfLines={1}>{source.title}</Text>
+              <Text style={styles.sourceNumber}>{idx + 1}.</Text>
+              <Text style={styles.sourceCardTitle} numberOfLines={2}>
+                {source.title}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>

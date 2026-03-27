@@ -404,6 +404,15 @@ Title (in English only):`;
     message: string,
   ): Promise<{ text: string; severity: string } | null> {
     if (!this.intentClassifier.canTriggerPrescription(intent)) return null;
+
+    // Only create a prescription proposal when the user is explicitly asking about medicine/prescriptions.
+    // This prevents mental-health check-ins (e.g., "I'm depressed", "rate me 1-10") from auto-triggering.
+    const explicitRxRequest = /(\bprescription\b|\bprescribe\b|\bmedicine\b|\bmedication\b|\btablet\b|\bmg\b|\brx\b|\bdose\b|\brefill\b|\bpharmacy\b)/i;
+    const mentalHealthNoMeds = /(\bdepress(ed)?\b|\banxiety\b|\bpanic\b|\bstress\b|\bmental\b|\bmood\b|\bsuicid(e|al)?\b|\btherapy\b|\bcounsel(ing)?\b)/i;
+
+    if (mentalHealthNoMeds.test(message) && !explicitRxRequest.test(message)) return null;
+    if (intent.type === 'symptom_report' && !explicitRxRequest.test(message)) return null;
+
     const sessionId = session._id?.toString?.();
     if (!sessionId) return null;
 
@@ -430,9 +439,8 @@ Title (in English only):`;
 
     return {
       text:
-        `I've prepared your prescription proposal and sent it to a doctor for verification.\n` +
-        `Estimated review time: ${recommendation.estimatedReviewTime}.\n` +
-        `You'll get a message here when your doctor-approved prescription is ready.`,
+        `I've prepared a prescription proposal for doctor verification.\n` +
+        `You'll get an in-app update here once it's approved.`,
       severity: 'MEDIUM',
     };
   }
