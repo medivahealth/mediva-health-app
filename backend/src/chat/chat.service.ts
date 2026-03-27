@@ -310,27 +310,56 @@ Title (in English only):`;
       nowHour < 12 ? 'Good morning' : nowHour < 18 ? 'Good afternoon' : 'Good evening';
 
     const localizedBase: Record<string, string> = {
-      en: `${timeGreeting}!`,
-      hi: 'नमस्ते!',
-      mr: 'नमस्कार!',
-      te: 'నమస్కారం!',
-      bn: 'নমস্কার!',
-      kn: 'ನಮಸ್ಕಾರ!',
-      ta: 'வணக்கம்!',
+      en: `${timeGreeting}`,
+      hi: 'नमस्ते',
+      mr: 'नमस्कार',
+      te: 'నమస్కారం',
+      bn: 'নমস্কার',
+      kn: 'ನಮಸ್ಕಾರ',
+      ta: 'வணக்கம்',
     };
 
     try {
       const ctx = await this.patientContextService.buildCompleteContext(userId);
       const name = ctx.demographics.name?.trim();
       const chronic = ctx.healthHistory.chronicConditions?.[0];
-      const intro = `${localizedBase[preferredLanguage] || localizedBase.en} ${
-        name ? `${name}, ` : ''
-      }I'm Dr. Mediva.`;
+      
+      // Natural, conversational greetings - not generic templates
+      const greetings: Record<string, string[]> = {
+        en: [
+          name ? `${timeGreeting} ${name}. What brings you in today?` : `${timeGreeting}. What brings you in today?`,
+          name ? `Hi ${name}. How are you feeling today?` : `Hi there. How are you feeling today?`,
+          name ? `Hello ${name}. Tell me what's been going on.` : `Hello. Tell me what's been going on.`,
+        ],
+        hi: [
+          name ? `नमस्ते ${name}। आज कैसे हैं आप?` : `नमस्ते। आज कैसे हैं आप?`,
+          name ? `हाय ${name}, क्या परेशानी है आज?` : `हाय, क्या परेशानी है आज?`,
+        ],
+        te: [
+          name ? `నమస్కారం ${name}। ఎలా ఉన్నారు?` : `నమస్కారం। ఎలా ఉన్నారు?`,
+          name ? `హాయ్ ${name}, ఏం జరుగుతోంది?` : `హాయ్, ఏం జరుగుతోంది?`,
+        ],
+        ta: [
+          name ? `வணக்கம் ${name}. எப்படி இருக்கிறீர்கள்?` : `வணக்கம். எப்படி இருக்கிறீர்கள்?`,
+        ],
+        bn: [
+          name ? `নমস্কার ${name}। কেমন আছেন?` : `নমস্কার। কেমন আছেন?`,
+        ],
+        kn: [
+          name ? `ನಮಸ್ಕಾರ ${name}। ಹೇಗಿದ್ದೀರಿ?` : `ನಮಸ್ಕಾರ। ಹೇಗಿದ್ದೀರಿ?`,
+        ],
+        mr: [
+          name ? `नमस्कार ${name}। कसे आहात?` : `नमस्कार। कसे आहात?`,
+        ],
+      };
+      
+      const langGreetings = greetings[preferredLanguage] || greetings.en;
+      const randomGreeting = langGreetings[Math.floor(Math.random() * langGreetings.length)];
 
       if (chronic) {
-        return `${intro} I can already see your ${chronic} history in your records, so we can tailor your care better today. What would you like help with right now?`;
+        return `${randomGreeting} I see you've been managing ${chronic} - let's make sure we're keeping that in check too. What's on your mind today?`;
       }
-      return `${intro} I'm ready to help with your symptoms, reports, or health questions. What would you like to discuss today?`;
+      return randomGreeting;
     } catch {
       return `${localizedBase[preferredLanguage] || localizedBase.en} I'm Dr. Mediva. Tell me what you're feeling right now, and I'll guide you step by step.`;
     }
@@ -1056,7 +1085,7 @@ RESPONSE FORMAT:
       } as any);
 
       const redirectResponse = classification.suggestedRedirect || 
-        "Hello! I'm Dr. Mediva. I focus on health and medical care. Tell me what symptoms or health concern you'd like help with.";
+        "I'm here to help with health concerns - symptoms, medications, test results, or treatment guidance. What would you like to discuss?";
       
       const currentSessionId = session._id!.toString();
       yield { type: 'session', data: currentSessionId };

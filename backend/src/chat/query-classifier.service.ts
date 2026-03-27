@@ -80,7 +80,7 @@ Rules:
           category: parsed.category || 'other',
           confidence: parsed.confidence || 0.5,
           suggestedRedirect: !parsed.isMedical 
-            ? "Hello, I'm Dr. Mediva. I can help with symptoms, medications, reports, preventive care, and next medical steps. What health concern should we address first?"
+            ? "I focus on health and medical care - symptoms, medications, reports, and treatment guidance. What health concern can I help you with today?"
             : undefined,
         };
       }
