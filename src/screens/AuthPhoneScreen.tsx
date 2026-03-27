@@ -102,10 +102,6 @@ export default function AuthPhoneScreen({ onLoginSuccess }: AuthPhoneScreenProps
     })
   ).current;
 
-  if (legalModal) {
-    return <TermsScreen type={legalModal} onClose={() => setLegalModal(null)} />;
-  }
-
   const sendOtp = async () => {
     if (resendCountdown > 0) {
       Alert.alert('Please wait', `You can resend OTP in ${resendCountdown}s`);
@@ -200,6 +196,10 @@ export default function AuthPhoneScreen({ onLoginSuccess }: AuthPhoneScreenProps
       setLoading(false);
     }
   };
+
+  if (legalModal) {
+    return <TermsScreen type={legalModal} onClose={() => setLegalModal(null)} />;
+  }
 
   return (
     <ImageBackground
