@@ -247,6 +247,27 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
       : baseMedivaInstruction;
 
     try {
+      const sendOpeningGreeting = (session: any) => {
+        try {
+          session.sendClientContent({
+            turns: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text:
+                      'Start with a short, warm greeting as Dr. Mediva and ask one focused health question to begin the consultation.',
+                  },
+                ],
+              },
+            ],
+            turnComplete: true,
+          });
+        } catch {
+          // If this fails, the user can still begin by speaking.
+        }
+      };
+
       const sessionPromise = ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-12-2025',
       config: {
@@ -356,6 +377,7 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
     });
 
       sessionRef.current = await sessionPromise;
+      sendOpeningGreeting(sessionRef.current);
     } catch (e: unknown) {
       if (connectTimeoutRef.current) {
         clearTimeout(connectTimeoutRef.current);
