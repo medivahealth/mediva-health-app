@@ -341,6 +341,12 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
         try {
           const session = await chatService.getSession(currentSessionId);
           setCurrentSession(session);
+          
+          // Set the chat title from the session summary if available
+          if (session.summary && session.summary.trim().length > 0 && session.summary !== 'New conversation') {
+            setChatTitle(session.summary.trim());
+          }
+          
           if (messages.length === 0 && session.messages && session.messages.length > 0) {
             setMessages(session.messages);
           } else if (messages.length === 0) {
@@ -1126,7 +1132,11 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
       </TouchableOpacity>
 
       <View style={s.headerCenter}>
-        <Text style={s.headerTitle} numberOfLines={1}>{chatTitle}</Text>
+        <Text style={s.headerTitle} numberOfLines={1}>
+          {chatTitle && chatTitle.trim().length > 0 && chatTitle !== 'New conversation' 
+            ? chatTitle 
+            : (messages.find(m => m.role === 'user')?.content?.substring(0, 30) || 'New Chat')}
+        </Text>
       </View>
 
       <View style={s.headerRight}>

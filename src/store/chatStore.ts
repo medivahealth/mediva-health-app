@@ -54,11 +54,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
 
   setMessages: (messages: ChatMessage[]) => {
-    // Auto-set title from first user message when loading a session
-    const firstUser = messages.find((m) => m.role === 'user');
-    const title = firstUser ? generateTitle(firstUser.content) : 'New Chat';
-    // Always update messages and title together
-    set({ messages: messages || [], chatTitle: title });
+    set((state) => {
+      const firstUser = messages.find((m) => m.role === 'user');
+      // Only auto-generate title if it's currently the default and we have a user message
+      const shouldGenerateTitle = 
+        state.chatTitle === 'New Chat' && 
+        firstUser && 
+        firstUser.content &&
+        firstUser.content.trim().length > 0;
+      
+      const newTitle = shouldGenerateTitle 
+        ? generateTitle(firstUser.content) 
+        : state.chatTitle;
+      
+      return { messages: messages || [], chatTitle: newTitle };
+    });
   },
 
   setStreaming: (streaming: boolean) => set({ isStreaming: streaming }),

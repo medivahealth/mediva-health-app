@@ -68,11 +68,20 @@ function groupByDate(
 }
 
 function getSessionTitle(session: ChatSession): string {
-  return (
-    session.summary ||
-    session.messages?.find((m) => m.role === 'user')?.content?.substring(0, 40) ||
-    'Untitled conversation'
-  );
+  // Use chatTitle if available, otherwise fallback to summary, then first message
+  const title = (session as any).chatTitle || session.summary;
+  
+  if (title && title.trim().length > 0 && title !== 'New conversation') {
+    return title.trim();
+  }
+  
+  // Fallback to first user message
+  const firstUserMessage = session.messages?.find((m) => m.role === 'user')?.content;
+  if (firstUserMessage && firstUserMessage.trim().length > 0) {
+    return firstUserMessage.trim().substring(0, 50);
+  }
+  
+  return 'Untitled conversation';
 }
 
 export default function ChatHistoryScreen({
@@ -120,6 +129,13 @@ export default function ChatHistoryScreen({
       // IMPORTANT: Set sessionId and messages together synchronously
       // This ensures ChatScreen receives both at the same time
       setSessionId(session._id);
+      
+      // Set the chat title from session summary if available
+      const title = full.summary || session.summary;
+      if (title && title.trim().length > 0 && title !== 'New conversation') {
+        useChatStore.getState().setChatTitle(title.trim());
+      }
+      
       setMessages(messages);
       
       // Small delay to ensure state is updated before navigation
@@ -131,6 +147,13 @@ export default function ChatHistoryScreen({
       console.error('Failed to load session:', err);
       // Even on error, try to use messages from the session object if available
       setSessionId(session._id);
+      
+      // Set title on error fallback too
+      const title = session.summary;
+      if (title && title.trim().length > 0 && title !== 'New conversation') {
+        useChatStore.getState().setChatTitle(title.trim());
+      }
+      
       const fallbackMessages = session.messages || [];
       if (fallbackMessages.length > 0) {
         setMessages(fallbackMessages);
