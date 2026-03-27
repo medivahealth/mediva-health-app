@@ -62,6 +62,8 @@
       }
     },
     "extra": {
+      "apiUrl": "https://mediva-health-app-production.up.railway.app/api",
+      "voiceWebUrl": "https://mediva-health-app.vercel.app",
       "eas": {
         "projectId": "50c58423-a4e4-46e2-83ad-b76e285e5029"
       }

@@ -14,13 +14,22 @@ import { isNgrokUrl, ngrokClientHeaders } from '../utils/ngrok';
  * 3. Fallback to localhost for web/simulator
  */
 function getBaseUrl(): string {
+  const configApiUrl =
+    (Constants.expoConfig as any)?.extra?.apiUrl ||
+    (Constants.manifest as any)?.extra?.apiUrl;
+
   // Production — set EXPO_PUBLIC_API_URL in EAS secrets / .env (e.g. https://api.mediva-health.com/api)
   if (!__DEV__) {
     const prod = process.env.EXPO_PUBLIC_API_URL?.trim();
     if (prod) {
       return prod.endsWith('/api') ? prod : `${prod.replace(/\/$/, '')}/api`;
     }
-    return 'https://api.mediva-health.com/api';
+    if (typeof configApiUrl === 'string' && configApiUrl.trim().length > 0) {
+      return configApiUrl.endsWith('/api')
+        ? configApiUrl
+        : `${configApiUrl.replace(/\/$/, '')}/api`;
+    }
+    return 'https://mediva-health-app-production.up.railway.app/api';
   }
 
   // Check for explicit API URL in environment (highest priority)
@@ -28,6 +37,13 @@ function getBaseUrl(): string {
   if (envApiUrl && typeof envApiUrl === 'string' && envApiUrl.trim().length > 0) {
     console.log('🔗 Using API URL from environment:', envApiUrl);
     return envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl}/api`;
+  }
+
+  if (typeof configApiUrl === 'string' && configApiUrl.trim().length > 0) {
+    console.log('🔗 Using API URL from app config:', configApiUrl);
+    return configApiUrl.endsWith('/api')
+      ? configApiUrl
+      : `${configApiUrl.replace(/\/$/, '')}/api`;
   }
 
   // Try to extract IP from Expo dev server
