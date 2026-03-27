@@ -15,6 +15,7 @@ import { IntentClassifierService, ClassifiedIntent } from './intent-classifier.s
 import { WebSearchService } from '../common/web-search.service';
 import { PredictiveAnalyticsService } from '../health/predictive-analytics.service';
 import { emitChatSessionUpdate } from './chat-status.bus';
+import { PrescriptionService } from '../prescription/prescription.service';
 import type OpenAI from 'openai';
 
 @Injectable()
@@ -35,6 +36,7 @@ export class ChatService {
     private intentClassifier: IntentClassifierService,
     private webSearchService: WebSearchService,
     private predictiveAnalytics: PredictiveAnalyticsService,
+    @Inject(forwardRef(() => PrescriptionService)) private prescriptionService: PrescriptionService,
   ) {}
 
   async getOrCreateSession(userId: string, sessionId?: string): Promise<ChatSession> {
@@ -393,6 +395,46 @@ Title (in English only):`;
       /\b(1\s*[-to]{1,3}\s*10|rate|scale|severity|how severe|how bad)\b/i;
 
     return medicalContextPattern.test(combined) || scaleQuestionPattern.test(combined);
+  }
+
+  private async maybeCreatePrescriptionProposal(
+    userId: string,
+    session: ChatSession,
+    intent: ClassifiedIntent,
+    message: string,
+  ): Promise<{ text: string; severity: string } | null> {
+    if (!this.intentClassifier.canTriggerPrescription(intent)) return null;
+    const sessionId = session._id?.toString?.();
+    if (!sessionId) return null;
+
+    const hasPending = await this.prescriptionService.hasActiveDraftForSession(sessionId);
+    if (hasPending) {
+      return {
+        text:
+          `I already have a prescription proposal under doctor review for this chat.\n` +
+          `Once verified, you'll see a "prescription ready" update here.`,
+        severity: 'LOW',
+      };
+    }
+
+    const diagnosisHint =
+      intent.type === 'prescription_request'
+        ? 'Medication consultation'
+        : 'Symptom-based clinical assessment';
+    const recommendation = await this.prescriptionService.generateRecommendation(
+      userId,
+      message,
+      diagnosisHint,
+      sessionId,
+    );
+
+    return {
+      text:
+        `I've prepared your prescription proposal and sent it to a doctor for verification.\n` +
+        `Estimated review time: ${recommendation.estimatedReviewTime}.\n` +
+        `You'll get a message here when your doctor-approved prescription is ready.`,
+      severity: 'MEDIUM',
+    };
   }
 
   async sendMessage(
@@ -832,7 +874,9 @@ If this isn't actually an emergency, please tell me more about what's happening 
     const modelTier = this.ragService.selectModelTier(message, preferredLanguage);
     const rawResponse = await this.openRouter.chat(llmMessages, modelTier);
     const response = this.appendNearbyHospitals(rawResponse, nearbyHospitals);
-    const severity = this.ragService.parseSeverity(response);
+    const proposal = await this.maybeCreatePrescriptionProposal(userId, session, intent, message).catch(() => null);
+    const finalResponse = proposal ? `${response}\n\n${proposal.text}` : response;
+    const severity = proposal?.severity || this.ragService.parseSeverity(finalResponse);
     const requiresDoctorReview = this.intentClassifier.requiresDoctorReview(intent) || 
                                   severity === 'HIGH' || 
                                   severity === 'EMERGENCY';
@@ -840,7 +884,7 @@ If this isn't actually an emergency, please tell me more about what's happening 
     // 8. Add assistant message
     session.messages.push({
       role: 'assistant',
-      content: response,
+      content: finalResponse,
       modelUsed: this.openRouter.getModelForTier(modelTier),
       citations: [],
       severity,
@@ -850,7 +894,7 @@ If this isn't actually an emergency, please tell me more about what's happening 
     const ctxUserTurns = session.messages.filter((m: any) => m.role === 'user').length;
     if (ctxUserTurns === 1) {
       try {
-        session.summary = await this.generateAiChatTitle(message, response);
+        session.summary = await this.generateAiChatTitle(message, finalResponse);
       } catch {
         session.summary = this.generateSummary(message);
       }
@@ -877,7 +921,7 @@ If this isn't actually an emergency, please tell me more about what's happening 
     this.logger.log(`Message processed in ${Date.now() - startTime}ms`);
 
     return {
-      response,
+      response: finalResponse,
       severity,
       sessionId: session._id!.toString(),
       requiresDoctorReview,
@@ -1093,6 +1137,10 @@ RESPONSE FORMAT:
       };
       return;
     }
+
+    const intent = await this.intentClassifier.classifyIntent(message).catch(
+      () => ({ type: 'unknown', confidence: 0.3, entities: {}, reasoning: 'fallback' } as ClassifiedIntent),
+    );
 
     // Query classification - check if it's medical
     const classification = await this.queryClassifier.classifyQuery(message);
@@ -1359,7 +1407,13 @@ If this isn't actually an emergency, please tell me more about what's happening 
     // In future, could enhance to synthesize multiple agent responses
 
     fullResponse = this.appendNearbyHospitals(fullResponse, nearbyHospitals);
-    const severity = this.ragService.parseSeverity(fullResponse);
+    const proposal = await this.maybeCreatePrescriptionProposal(userId, session, intent, message).catch(() => null);
+    if (proposal?.text) {
+      const suffix = `\n\n${proposal.text}`;
+      fullResponse += suffix;
+      yield { type: 'token', data: suffix };
+    }
+    const severity = proposal?.severity || this.ragService.parseSeverity(fullResponse);
     const requiresDoctorReview = severity === 'HIGH' || severity === 'EMERGENCY';
 
     const assistantMessage = {

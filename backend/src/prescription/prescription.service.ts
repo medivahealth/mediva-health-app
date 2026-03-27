@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Prescription, Medication, PrescriptionStatus, PrescriptionUrgency } from './prescription.schema';
+import { ChatSession } from '../chat/chat.schema';
 import { PatientContextService, CompletePatientContext } from '../context/patient-context.service';
 import { OpenRouterService } from '../common/openrouter.service';
 import { ContinuousLearningService } from '../chat/continuous-learning.service';
@@ -41,6 +42,7 @@ export class PrescriptionService {
 
   constructor(
     @InjectModel(Prescription.name) private prescriptionModel: Model<Prescription>,
+    @InjectModel(ChatSession.name) private chatModel: Model<ChatSession>,
     private patientContextService: PatientContextService,
     private openRouter: OpenRouterService,
     private continuousLearning: ContinuousLearningService,
@@ -336,6 +338,15 @@ export class PrescriptionService {
     return { prescriptions, total };
   }
 
+  async hasActiveDraftForSession(chatSessionId?: string): Promise<boolean> {
+    if (!chatSessionId) return false;
+    const existing = await this.prescriptionModel.findOne({
+      chatSessionId: new Types.ObjectId(chatSessionId),
+      status: 'pending_doctor_review',
+    }).select('_id').lean();
+    return !!existing;
+  }
+
   // ─── Private Helper Methods ─────────────────────────────────────────
 
   /**
@@ -522,11 +533,74 @@ Note: For India, Schedule H drugs require prescription. Schedule H1 drugs requir
     this.logger.log(`Notifying doctors about prescription ${prescription._id} (${prescription.urgency})`);
   }
 
-  private notifyLinkedChatSession(prescription: any) {
+  private mapMedsForChat(medications: Medication[] = []) {
+    return medications.map((m) => ({
+      medication: m.drugName || m.genericName || 'Medication',
+      dosage: m.dosage || '',
+      frequency: m.frequency || '',
+      duration: m.duration || '',
+      instructions: m.instructions || '',
+    }));
+  }
+
+  private async notifyLinkedChatSession(prescription: any) {
     if (!prescription?.chatSessionId || !prescription?.patientId) return;
-    emitChatSessionUpdate({
-      sessionId: prescription.chatSessionId.toString(),
-      userId: prescription.patientId.toString(),
-    });
+    const sessionId = prescription.chatSessionId.toString();
+    const userId = prescription.patientId.toString();
+
+    const session = await this.chatModel.findById(sessionId);
+    if (session) {
+      if (prescription.status === 'pending_doctor_review') {
+        session.requiresDoctorReview = true;
+        session.status = 'pending_review';
+        session.proposedPrescription = this.mapMedsForChat(prescription.aiRecommendation?.medications || []);
+        session.messages.push({
+          role: 'assistant',
+          content:
+            `I have prepared a prescription proposal and sent it to a doctor for verification.\n\n` +
+            `Please wait while the doctor reviews it. You will get an update here once approved.`,
+          modelUsed: 'prescription-orchestrator',
+          citations: [],
+          severity: 'MEDIUM',
+          timestamp: new Date(),
+        } as any);
+      } else if (prescription.status === 'approved' || prescription.status === 'modified') {
+        session.doctorApproved = true;
+        session.status = 'reviewed';
+        session.finalPrescription = (prescription.doctorDecision?.medications || []).map((m: Medication) => ({
+          medication: m.drugName || m.genericName || 'Medication',
+          dosage: m.dosage || '',
+          frequency: m.frequency || '',
+          duration: m.duration || '',
+          instructions: m.instructions || '',
+          signedBy: prescription.reviewingDoctorId || new Types.ObjectId(),
+          signedAt: prescription.reviewedAt || new Date(),
+        }));
+        session.messages.push({
+          role: 'doctor',
+          content:
+            `Your prescription is ready and doctor-approved.\n\n` +
+            `Tap the prescription card in this chat to view details. You can now share it with a nearby pharmacy to get your medicines.`,
+          modelUsed: '',
+          citations: [],
+          severity: 'LOW',
+          timestamp: new Date(),
+        } as any);
+      } else if (prescription.status === 'rejected') {
+        session.messages.push({
+          role: 'doctor',
+          content:
+            `Your prescription request was reviewed by the doctor and needs changes before approval.\n\n` +
+            `Please continue the chat with your latest symptoms so we can update the prescription proposal.`,
+          modelUsed: '',
+          citations: [],
+          severity: 'LOW',
+          timestamp: new Date(),
+        } as any);
+      }
+      await session.save();
+    }
+
+    emitChatSessionUpdate({ sessionId, userId });
   }
 }
