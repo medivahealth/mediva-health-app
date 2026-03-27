@@ -9,11 +9,11 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { NotificationsService, PushNotificationPayload } from './notifications.service';
 
-class RegisterTokenDto {
+// Use interfaces instead of classes for DTOs to avoid strict initialization errors
+interface RegisterTokenDto {
   token: string;
   platform: 'ios' | 'android' | 'web';
   deviceId?: string;
@@ -21,29 +21,32 @@ class RegisterTokenDto {
   appVersion?: string;
 }
 
-class UnregisterTokenDto {
+interface UnregisterTokenDto {
   token: string;
 }
 
-class SendTestNotificationDto {
+interface SendTestNotificationDto {
   title: string;
   body: string;
   category?: 'health_alert' | 'medication_reminder' | 'appointment' | 'general' | 'emergency';
 }
 
-@ApiTags('Notifications')
+// Custom request type with user
+interface RequestWithUser extends Request {
+  user: {
+    userId: string;
+  };
+}
+
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post('register-token')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Register push notification token' })
-  @ApiResponse({ status: 200, description: 'Token registered successfully' })
   async registerToken(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Body() dto: RegisterTokenDto,
   ) {
     const pushToken = await this.notificationsService.registerPushToken(
@@ -61,7 +64,7 @@ export class NotificationsController {
       success: true,
       message: 'Push token registered successfully',
       data: {
-        id: pushToken._id,
+        id: (pushToken as any)._id?.toString() || pushToken.token.slice(0, 20),
         platform: pushToken.platform,
         deviceName: pushToken.deviceName,
       },
@@ -70,8 +73,6 @@ export class NotificationsController {
 
   @Delete('unregister-token')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Unregister push notification token' })
-  @ApiResponse({ status: 200, description: 'Token unregistered successfully' })
   async unregisterToken(@Body() dto: UnregisterTokenDto) {
     await this.notificationsService.unregisterPushToken(dto.token);
 
@@ -82,15 +83,13 @@ export class NotificationsController {
   }
 
   @Get('tokens')
-  @ApiOperation({ summary: 'Get registered push tokens' })
-  @ApiResponse({ status: 200, description: 'Returns list of registered tokens' })
-  async getUserTokens(@Request() req) {
+  async getUserTokens(@Request() req: RequestWithUser) {
     const tokens = await this.notificationsService.getUserPushTokens(req.user.userId);
 
     return {
       success: true,
       data: tokens.map(t => ({
-        id: t._id,
+        id: (t as any)._id?.toString() || t.token.slice(0, 20),
         platform: t.platform,
         deviceName: t.deviceName,
         isActive: t.isActive,
@@ -101,10 +100,8 @@ export class NotificationsController {
 
   @Post('test')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send test notification (for development)' })
-  @ApiResponse({ status: 200, description: 'Test notification sent' })
   async sendTestNotification(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Body() dto: SendTestNotificationDto,
   ) {
     const payload: PushNotificationPayload = {
@@ -131,9 +128,7 @@ export class NotificationsController {
   }
 
   @Get('stats')
-  @ApiOperation({ summary: 'Get notification statistics' })
-  @ApiResponse({ status: 200, description: 'Returns notification statistics' })
-  async getNotificationStats(@Request() req) {
+  async getNotificationStats(@Request() req: RequestWithUser) {
     const stats = await this.notificationsService.getUserNotificationStats(req.user.userId);
 
     return {

@@ -6,13 +6,13 @@ export type PushTokenDocument = PushToken & Document;
 @Schema({ timestamps: true })
 export class PushToken {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({ required: true })
-  token: string;
+  token!: string;
 
   @Prop({ type: String, enum: ['ios', 'android', 'web'], required: true })
-  platform: 'ios' | 'android' | 'web';
+  platform!: 'ios' | 'android' | 'web';
 
   @Prop({ type: String, required: false })
   deviceId?: string;
@@ -24,10 +24,10 @@ export class PushToken {
   appVersion?: string;
 
   @Prop({ type: Boolean, default: true })
-  isActive: boolean;
+  isActive!: boolean;
 
   @Prop({ type: Date, default: Date.now })
-  lastUsedAt: Date;
+  lastUsedAt!: Date;
 }
 
 export const PushTokenSchema = SchemaFactory.createForClass(PushToken);

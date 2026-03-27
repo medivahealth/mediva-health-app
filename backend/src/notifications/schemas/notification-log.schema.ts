@@ -6,28 +6,28 @@ export type NotificationLogDocument = NotificationLog & Document;
 @Schema({ timestamps: true })
 export class NotificationLog {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({ required: true })
-  token: string;
+  token!: string;
 
   @Prop({ type: String, enum: ['ios', 'android', 'web'], required: true })
-  platform: 'ios' | 'android' | 'web';
+  platform!: 'ios' | 'android' | 'web';
 
   @Prop({ type: String, required: true })
-  title: string;
+  title!: string;
 
   @Prop({ type: String, required: true })
-  body: string;
+  body!: string;
 
   @Prop({ type: String, enum: ['health_alert', 'medication_reminder', 'appointment', 'general', 'emergency'], default: 'general' })
-  category: 'health_alert' | 'medication_reminder' | 'appointment' | 'general' | 'emergency';
+  category!: 'health_alert' | 'medication_reminder' | 'appointment' | 'general' | 'emergency';
 
   @Prop({ type: Object, required: false })
   data?: Record<string, any>;
 
   @Prop({ type: String, enum: ['pending', 'sent', 'delivered', 'failed', 'opened'], default: 'pending' })
-  status: 'pending' | 'sent' | 'delivered' | 'failed' | 'opened';
+  status!: 'pending' | 'sent' | 'delivered' | 'failed' | 'opened';
 
   @Prop({ type: String, required: false })
   errorMessage?: string;

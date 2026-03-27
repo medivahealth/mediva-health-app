@@ -139,11 +139,12 @@ export class NotificationsService {
         // Log successful notification
         await this.logNotification(userId, token, payload, 'sent');
         sent++;
-      } catch (error) {
-        this.logger.error(`Failed to send notification to ${token.platform}: ${error.message}`);
+      } catch (error: any) {
+        const errorMessage = error?.message || String(error);
+        this.logger.error(`Failed to send notification to ${token.platform}: ${errorMessage}`);
         
         // Log failed notification
-        await this.logNotification(userId, token, payload, 'failed', error.message);
+        await this.logNotification(userId, token, payload, 'failed', errorMessage);
         
         // Mark token as inactive if it's invalid
         if (this.isInvalidTokenError(error)) {
@@ -196,8 +197,9 @@ export class NotificationsService {
       if (response.data.failure > 0) {
         throw new Error(response.data.results?.[0]?.error || 'FCM delivery failed');
       }
-    } catch (error) {
-      throw new Error(`FCM error: ${error.message}`);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      throw new Error(`FCM error: ${errorMessage}`);
     }
   }
 
@@ -237,8 +239,9 @@ export class NotificationsService {
       if (response.data.data?.status === 'error') {
         throw new Error(response.data.data?.message || 'Expo push delivery failed');
       }
-    } catch (error) {
-      throw new Error(`Push notification error: ${error.message}`);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      throw new Error(`Push notification error: ${errorMessage}`);
     }
   }
 
@@ -265,8 +268,9 @@ export class NotificationsService {
         errorMessage,
         sentAt: status === 'sent' ? new Date() : undefined,
       });
-    } catch (error) {
-      this.logger.error(`Failed to log notification: ${error.message}`);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      this.logger.error(`Failed to log notification: ${errorMessage}`);
     }
   }
 
