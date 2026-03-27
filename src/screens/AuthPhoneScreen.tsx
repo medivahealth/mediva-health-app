@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Dimensions,
   Keyboard,
   KeyboardAvoidingView,
@@ -82,17 +81,22 @@ export default function AuthPhoneScreen({ onLoginSuccess }: AuthPhoneScreenProps
   const isEmailValid = !email.trim() || email.includes('@');
   const isDobValid = !dob.trim() || /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(dob.trim());
 
+  const goBackTo = (target: AuthStep) => {
+    Keyboard.dismiss();
+    setStep(target);
+  };
+
   // Swipe gesture for going back
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
         return gestureState.dx > 20 || gestureState.dx < -20;
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dx > 50) {
           // Swipe right - go back
-          setStep('intro');
+          goBackTo('intro');
         }
       },
     })
@@ -282,8 +286,8 @@ export default function AuthPhoneScreen({ onLoginSuccess }: AuthPhoneScreenProps
                     <View style={styles.loginRow}>
                       <TouchableOpacity 
                         style={styles.smallBackBtn}
-                        onPressIn={() => setStep('intro')}
-                        activeOpacity={0.8}
+                        onPress={() => goBackTo('intro')}
+                        activeOpacity={1}
                       >
                         <ButtonBg
                           width="100%"
@@ -342,8 +346,8 @@ export default function AuthPhoneScreen({ onLoginSuccess }: AuthPhoneScreenProps
                   <View style={styles.loginRow}>
                     <TouchableOpacity 
                       style={styles.smallBackBtn}
-                      onPressIn={() => setStep('phone')}
-                      activeOpacity={0.8}
+                      onPress={() => goBackTo('phone')}
+                      activeOpacity={1}
                     >
                       <ButtonBg
                         width="100%"
@@ -427,8 +431,8 @@ export default function AuthPhoneScreen({ onLoginSuccess }: AuthPhoneScreenProps
                   <View style={styles.loginRow}>
                     <TouchableOpacity 
                       style={styles.smallBackBtn}
-                      onPressIn={() => setStep('phone')}
-                      activeOpacity={0.8}
+                      onPress={() => goBackTo('phone')}
+                      activeOpacity={1}
                     >
                       <ButtonBg
                         width="100%"
