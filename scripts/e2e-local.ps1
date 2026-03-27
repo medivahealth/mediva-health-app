@@ -47,14 +47,14 @@ npm run dev:https
 "@
 
 Write-Host ''
-Write-Host 'Next:' -ForegroundColor Green
-Write-Host '  1) Wait for Nest + Vite ready (HTTPS on 5173).' -ForegroundColor White
-Write-Host '  2) Phone same Wi-Fi. Use dev build (expo run:ios / run:android) for best WebView SSL.' -ForegroundColor White
-Write-Host '  3) Start Metro:' -ForegroundColor White
-Write-Host '     cd `"$repo`"" -ForegroundColor Gray
-Write-Host '     npx expo start -c' -ForegroundColor Gray
+Write-Host "Next:" -ForegroundColor Green
+Write-Host "  1) Wait for Nest + Vite ready (HTTPS on 5173)." -ForegroundColor White
+Write-Host "  2) Phone same Wi-Fi. Use dev build (expo run:ios / run:android) for best WebView SSL." -ForegroundColor White
+Write-Host "  3) Start Metro:" -ForegroundColor White
+Write-Host "     cd `"$repo`"" -ForegroundColor Gray
+Write-Host "     npx expo start -c" -ForegroundColor Gray
 Write-Host ''
-Write-Host 'Guide: docs\EXPO_FULL_TEST_LOCAL.md' -ForegroundColor Cyan
+Write-Host "Guide: docs\EXPO_FULL_TEST_LOCAL.md" -ForegroundColor Cyan
 
 if (-not $SkipExpo) {
   Set-Location -LiteralPath $repo

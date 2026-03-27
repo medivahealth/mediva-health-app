@@ -58,10 +58,11 @@ export const isHealthConnectAvailable = async (): Promise<boolean> => {
 
 // Check if Health Connect app is installed
 const checkHealthConnectInstalled = async (): Promise<boolean> => {
-  // In production, this would check for the Health Connect package
-  // For now, we check if user has granted permissions previously
-  const hasPermission = await SecureStore.getItemAsync('healthConnectPermission');
-  return hasPermission === 'granted';
+  // Real package probing needs a native module. Until then, treat Android as
+  // install-capable by default so first-time users can continue setup.
+  const storedAvailability = await SecureStore.getItemAsync('healthConnectInstalled');
+  if (storedAvailability === 'false') return false;
+  return true;
 };
 
 // Request Health Connect permissions
@@ -87,6 +88,7 @@ export const requestHealthConnectPermissions = async (): Promise<boolean> => {
     
     // For now, simulate permission grant
     await SecureStore.setItemAsync('healthConnectPermission', 'granted');
+    await SecureStore.setItemAsync('healthConnectInstalled', 'true');
     return true;
   } catch (error) {
     console.error('Health Connect permission error:', error);

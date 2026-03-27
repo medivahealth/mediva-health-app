@@ -14,6 +14,29 @@ export class QueryClassifierService {
 
   constructor(private openRouter: OpenRouterService) {}
 
+  private readonly greetingPatterns = [
+    /\b(hi|hello|hey|heyy|yo|wassup|sup|good morning|good afternoon|good evening)\b/i,
+  ];
+
+  private pickRedirect(query: string): string {
+    const friendlyGreetings = [
+      "Hey, good to hear from you. Tell me what health issue or symptom is bothering you, and I'll help step by step.",
+      "Hi there. I'm here for your health questions - symptoms, medicines, reports, or treatment guidance. What would you like help with right now?",
+      "Hello. We can talk through any health concern together. What are you feeling today?",
+      "Thanks for checking in. I'm your medical assistant for health concerns - what should we focus on first?",
+    ];
+    const strictRedirects = [
+      "I can help with health and medical topics - symptoms, medications, reports, and treatment guidance. What health concern should we start with?",
+      "Let's focus on your health. Share your symptom, report, or medicine question, and I'll guide you clearly.",
+      "I work best on medical questions. Tell me what's going on with your health, and we'll sort it out together.",
+      "I'm here for medical support. What symptom or health concern would you like to discuss first?",
+    ];
+
+    const isGreeting = this.greetingPatterns.some((pattern) => pattern.test(query));
+    const pool = isGreeting ? friendlyGreetings : strictRedirects;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
   /**
    * Classify if a query is medical-related
    * Returns classification with confidence score
@@ -41,7 +64,7 @@ export class QueryClassifierService {
           ? 'coding' 
           : 'general',
         confidence: 0.9,
-        suggestedRedirect: "Hi, I'm Dr. Mediva. I focus on medical and health-related questions. Tell me your symptom or health concern, and I'll help you step by step.",
+        suggestedRedirect: this.pickRedirect(query),
       };
     }
 
@@ -80,7 +103,7 @@ Rules:
           category: parsed.category || 'other',
           confidence: parsed.confidence || 0.5,
           suggestedRedirect: !parsed.isMedical 
-            ? "I focus on health and medical care - symptoms, medications, reports, and treatment guidance. What health concern can I help you with today?"
+            ? this.pickRedirect(query)
             : undefined,
         };
       }
@@ -107,7 +130,7 @@ Rules:
       category: hasMedicalKeyword ? 'medical' : 'general',
       confidence: hasMedicalKeyword ? 0.7 : 0.6,
       suggestedRedirect: !hasMedicalKeyword
-        ? "Hi, I'm Dr. Mediva. I can support you with medical and health questions. What would you like help with today?"
+        ? this.pickRedirect(query)
         : undefined,
     };
   }

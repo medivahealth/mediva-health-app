@@ -135,7 +135,7 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
         'Microphone access failed. Allow microphone permission in your browser/app settings, then reopen voice.',
       );
       setIsConnecting(false);
-      setStatus('say something');
+      setStatus('ready');
     }
   };
 
@@ -601,7 +601,7 @@ IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifyi
               : isConnecting 
                 ? connectingStage 
                 : status === 'ready' 
-                  ? 'Say something' 
+                  ? 'Tap mic and start talking' 
                   : 'Listening'}
           </span>
           
