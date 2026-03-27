@@ -116,7 +116,7 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
         }
         try {
           sessionRef.current.sendRealtimeInput({
-            media: {
+            audio: {
               data: int16PcmToBase64(pcmData),
               mimeType: 'audio/pcm;rate=16000',
             },

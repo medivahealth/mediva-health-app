@@ -296,7 +296,9 @@ ADDITIONAL RULES:
 
     try {
       session.sendRealtimeInput({
-        media: { data, mimeType },
+        audio: { data, mimeType },
+        // Compatibility for SDK variants that still read "media"
+        media: { data, mimeType } as any,
       });
     } catch (e: any) {
       this.logger.warn(`sendRealtimeInput failed: ${e?.message || e}`);
