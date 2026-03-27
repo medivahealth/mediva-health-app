@@ -203,8 +203,6 @@ export default function App() {
         ) : (
           <>
             <ActivityIndicator size="large" color="#111" style={{ marginTop: 20 }} />
-            <Text style={styles.loadingText}>Signing you in...</Text>
-            <Text style={styles.loadingHint}>Preparing your profile…</Text>
           </>
         )}
       </SafeAreaView>

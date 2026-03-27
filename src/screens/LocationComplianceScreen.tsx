@@ -4,6 +4,7 @@ import {
   Alert,
   Dimensions,
   ImageBackground,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -57,10 +58,21 @@ export default function LocationComplianceScreen({ onComplete }: LocationComplia
     try {
       const loc = await requestAndResolveState();
       if (!loc.consent) {
-        Alert.alert(
-          'Location required',
-          'We need your location to confirm your state for clinical licensing compliance.'
-        );
+        if (loc.canAskAgain === false) {
+          Alert.alert(
+            'Location required',
+            'Location access is blocked. Please enable location permission in Settings to continue.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ],
+          );
+        } else {
+          Alert.alert(
+            'Location required',
+            'We need your location to confirm your state for clinical licensing compliance.',
+          );
+        }
         return;
       }
 
