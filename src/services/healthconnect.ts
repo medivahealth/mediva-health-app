@@ -57,12 +57,18 @@ export const isHealthConnectAvailable = async (): Promise<boolean> => {
 };
 
 // Check if Health Connect app is installed
-const checkHealthConnectInstalled = async (): Promise<boolean> => {
+export const checkHealthConnectInstalled = async (): Promise<boolean> => {
   // Real package probing needs a native module. Until then, treat Android as
   // install-capable by default so first-time users can continue setup.
   const storedAvailability = await SecureStore.getItemAsync('healthConnectInstalled');
   if (storedAvailability === 'false') return false;
   return true;
+};
+
+export const hasHealthConnectPermission = async (): Promise<boolean> => {
+  if (Platform.OS !== 'android') return false;
+  const hasPermission = await SecureStore.getItemAsync('healthConnectPermission');
+  return hasPermission === 'granted';
 };
 
 // Request Health Connect permissions
@@ -632,6 +638,8 @@ Your health data will automatically sync from connected apps.
 
 export default {
   isHealthConnectAvailable,
+  checkHealthConnectInstalled,
+  hasHealthConnectPermission,
   requestHealthConnectPermissions,
   requestHealthConnectPermissionWithGuide,
   getSteps,

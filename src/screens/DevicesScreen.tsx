@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as HealthKitService from '../services/healthkit';
+import * as HealthConnectService from '../services/healthconnect';
 import api from '../services/api';
 import { SIZES } from '../theme';
 
@@ -22,10 +23,12 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [authorized, setAuthorized] = useState(false);
+  const [healthConnectInstalled, setHealthConnectInstalled] = useState(false);
   const [healthData, setHealthData] = useState<any>(null);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
 
   const isIOS = Platform.OS === 'ios';
+  const isAndroid = Platform.OS === 'android';
   const isHealthKitAvailable = isIOS && HealthKitService.isModuleAvailable();
 
   useEffect(() => {
@@ -35,7 +38,7 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Check HealthKit authorization on iOS
+      // Check Health authorization status based on platform
       if (isHealthKitAvailable) {
         const auth = await HealthKitService.requestAuthorization(
           ['Workout', 'Steps', 'Distance', 'HeartRate', 'RestingHeartRate', 'HRV', 
@@ -43,6 +46,13 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
           []
         );
         setAuthorized(auth);
+      } else if (isAndroid) {
+        const installed = await HealthConnectService.checkHealthConnectInstalled();
+        setHealthConnectInstalled(installed);
+        const hasPermission = installed
+          ? await HealthConnectService.hasHealthConnectPermission()
+          : false;
+        setAuthorized(hasPermission);
       }
 
       // Load health summary from backend
@@ -61,9 +71,37 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      if (isHealthKitAvailable && authorized) {
+      if (isHealthKitAvailable) {
+        const auth = authorized
+          ? true
+          : await HealthKitService.requestAuthorization(
+              ['Workout', 'Steps', 'Distance', 'HeartRate', 'RestingHeartRate', 'HRV', 'Sleep', 'Height', 'Weight', 'OxygenSaturation', 'VO2Max', 'RespiratoryRate'],
+              []
+            );
+        setAuthorized(auth);
+        if (!auth) {
+          Alert.alert('Permission Required', 'Please allow Apple Health permissions to sync your data.');
+          return;
+        }
         // Sync HealthKit data to backend
         await HealthKitService.syncToBackend(api);
+      } else if (isAndroid) {
+        const installed = await HealthConnectService.checkHealthConnectInstalled();
+        setHealthConnectInstalled(installed);
+        if (!installed) {
+          Alert.alert('Health Connect Required', HealthConnectService.getHealthConnectSetupInstructions());
+          return;
+        }
+        const hasPermissions = await HealthConnectService.requestHealthConnectPermissions();
+        setAuthorized(hasPermissions);
+        if (!hasPermissions) {
+          Alert.alert('Permission Required', 'Please allow Health Connect permissions to sync your data.');
+          return;
+        }
+        await HealthConnectService.syncHealthConnectToBackend(api);
+      } else {
+        Alert.alert('Unsupported Platform', 'Health source sync is available only on iOS and Android devices.');
+        return;
       }
       
       // Refresh data
@@ -131,23 +169,27 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
 
       <ScrollView style={s.scrollView} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={s.subtitle}>
-          Connect Apple Health to get personalized health advice based on your real data.
+          {isIOS
+            ? 'Connect Apple Health to get personalized health advice based on your real data.'
+            : 'Connect Android Health Connect to sync real health data from Google Fit and other apps.'}
         </Text>
 
-        {/* Apple Health Card */}
+        {/* Platform Health Source Card */}
         <View style={s.sourceCard}>
           <View style={s.sourceHeader}>
             <View style={s.sourceInfo}>
-              <Text style={s.sourceName}>Apple Health</Text>
+              <Text style={s.sourceName}>{isIOS ? 'Apple Health' : 'Android Health Connect'}</Text>
               <Text style={[s.sourceStatus, authorized && s.sourceStatusConnected]}>
-                {isHealthKitAvailable 
-                  ? authorized 
-                    ? 'Connected • Syncing data' 
-                    : 'Not authorized'
-                  : 'Requires iOS device'}
+                {isIOS
+                  ? (isHealthKitAvailable
+                      ? (authorized ? 'Connected • Syncing data' : 'Not authorized')
+                      : 'Requires iOS native build')
+                  : (healthConnectInstalled
+                      ? (authorized ? 'Connected • Syncing data' : 'Not authorized')
+                      : 'Setup required')}
               </Text>
             </View>
-            {isHealthKitAvailable && (
+            {(isHealthKitAvailable || isAndroid) && (
               <View style={[s.statusBadge, authorized ? s.statusBadgeConnected : s.statusBadgeDisconnected]}>
                 <Text style={authorized ? s.statusTextConnected : s.statusTextDisconnected}>
                   {authorized ? 'Connected' : 'Disconnected'}
@@ -189,23 +231,23 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
         </View>
 
         {/* Sync Button */}
-        {authorized && (
-          <TouchableOpacity 
-            style={s.syncButton} 
-            onPress={handleSync} 
-            disabled={syncing}
-            activeOpacity={0.7}
-          >
-            {syncing ? (
-              <ActivityIndicator size="small" color="#000000" />
-            ) : (
-              <>
-                <Ionicons name="sync-outline" size={18} color="#000000" style={{ marginRight: 8 }} />
-                <Text style={s.syncButtonText}>Sync Health Data</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity 
+          style={s.syncButton} 
+          onPress={handleSync} 
+          disabled={syncing}
+          activeOpacity={0.7}
+        >
+          {syncing ? (
+            <ActivityIndicator size="small" color="#000000" />
+          ) : (
+            <>
+              <Ionicons name="sync-outline" size={18} color="#000000" style={{ marginRight: 8 }} />
+              <Text style={s.syncButtonText}>
+                {isIOS ? 'Sync Apple Health' : 'Sync Health Connect'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
 
         {lastSynced && (
           <Text style={s.lastSyncText}>

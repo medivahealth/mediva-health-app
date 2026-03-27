@@ -37,11 +37,10 @@ export default function HealthConnectionsScreen() {
       if (Platform.OS === 'android') {
         const installed = await HealthConnectService.checkHealthConnectInstalled();
         setHealthConnectInstalled(installed);
-        
-        if (installed) {
-          const permissions = await HealthConnectService.requestHealthConnectPermissions();
-          setHealthConnectAuthorized(permissions);
-        }
+        const hasPermissions = installed
+          ? await HealthConnectService.hasHealthConnectPermission()
+          : false;
+        setHealthConnectAuthorized(hasPermissions);
       }
     } catch (err: any) {
       console.error('Error loading health connections:', err);
@@ -113,6 +112,7 @@ export default function HealthConnectionsScreen() {
     try {
       // Check if Health Connect is installed
       const isInstalled = await HealthConnectService.checkHealthConnectInstalled();
+      setHealthConnectInstalled(isInstalled);
       if (!isInstalled) {
         Alert.alert(
           'Health Connect Required',
