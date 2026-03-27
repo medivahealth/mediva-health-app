@@ -596,8 +596,27 @@ export class AuthService {
           },
         }));
         return { success: true, message: 'OTP sent successfully' };
-      } catch (err) {
-        console.error('AWS SNS send error:', err);
+      } catch (err: any) {
+        const raw =
+          err instanceof Error
+            ? err.message
+            : err && typeof err === 'object' && 'message' in err
+              ? String((err as { message: unknown }).message)
+              : String(err);
+        const accessDenied =
+          raw.includes('not authorized to perform: SNS:Publish') ||
+          raw.includes('AccessDenied');
+
+        if (accessDenied) {
+          // Avoid repeated retry noise/timeouts on every resend when IAM is missing SNS:Publish.
+          this.snsClient = null;
+          this.snsPublishCommand = null;
+          console.warn(
+            'AWS SNS disabled for OTP: current IAM user is missing SNS:Publish permission. Falling back to alternate OTP provider.',
+          );
+        } else {
+          console.error('AWS SNS send error:', err);
+        }
       }
     }
 
