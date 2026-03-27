@@ -369,8 +369,7 @@ ${allSources.length > 0 ? `### Sources\n\n${sourcesListStr}` : ''}
 - [Relevant follow-up question 1]?
 - [Relevant follow-up question 2]?
 
-If HIGH or EMERGENCY severity, add this as the FIRST line after the severity tag:
-> ⚠️ **This requires immediate medical attention. Please call 108 or visit the nearest emergency room immediately.**`;
+For HIGH or EMERGENCY situations: Be calm but direct. Say something like "I want you to get this checked right away. Please call 108 or go to the nearest hospital." No warning symbols (⚠️) or bold tags in the visible response.`;
   }
 
   selectModelTier(query: string, preferredLanguage: string): ModelTier {

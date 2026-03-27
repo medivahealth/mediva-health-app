@@ -196,8 +196,16 @@ export default function MarkdownRenderer({ content, onFollowUp, variant = 'defau
     hr: { height: 1, backgroundColor: border, marginVertical: 12 },
     sourcesSection: { marginTop: 12 },
     sectionTitle: { fontSize: 12, fontWeight: '400', color: secondary, fontFamily: isChat ? 'HelveticaNeue' : FONTS.bold, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-    sourceChip: { marginBottom: 8 },
-    sourceCardTitle: { fontSize: 11, color: '#898989', fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, lineHeight: 16 },
+    sourceChip: { 
+      marginBottom: 8, 
+      backgroundColor: isChat ? '#1F2937' : '#FFFFFF',
+      borderRadius: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderLeftWidth: 3,
+      borderLeftColor: COLORS.primary,
+    },
+    sourceCardTitle: { fontSize: 13, color: primary, fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, lineHeight: 18 },
     followUpSection: { marginTop: 12, backgroundColor: isChat ? '#0B1220' : '#F5F5F5', borderRadius: 12, padding: 12 },
     followUpBtn: { backgroundColor: isChat ? '#1F2937' : '#FFFFFF', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6 },
     followUpText: { fontSize: SIZES.sm, color: primary, fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, lineHeight: 18 },
@@ -295,14 +303,19 @@ export default function MarkdownRenderer({ content, onFollowUp, variant = 'defau
   return (
     <View style={styles.container}>
       {elements}
-      {/* Sources section - non-clickable text only */}
+      {/* Sources section - clickable cards with name only */}
       {sourceEntries.length > 0 && (
         <View style={styles.sourcesSection}>
-          <Text style={styles.sectionTitle}>Sources:</Text>
-          {sourceEntries.map(({ id, source, score }) => (
-            <View key={`src-${id}`} style={styles.sourceChip}>
-              <Text style={styles.sourceCardTitle} numberOfLines={2}>{id}. {source.title} (verified {score}/100)</Text>
-            </View>
+          <Text style={styles.sectionTitle}>Resources</Text>
+          {sourceEntries.map(({ id, source }) => (
+            <TouchableOpacity 
+              key={`src-${id}`} 
+              style={styles.sourceChip}
+              onPress={() => safeOpenUrl(source.url)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.sourceCardTitle} numberOfLines={1}>{source.title}</Text>
+            </TouchableOpacity>
           ))}
         </View>
       )}

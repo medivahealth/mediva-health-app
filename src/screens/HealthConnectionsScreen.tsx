@@ -14,6 +14,7 @@ import {
 
 const logoImg = require('../../assets/applogo.png');
 import * as HealthKitService from '../services/healthkit';
+import * as HealthConnectService from '../services/healthconnect';
 import api from '../services/api';
 
 export default function HealthConnectionsScreen() {
@@ -24,12 +25,26 @@ export default function HealthConnectionsScreen() {
   // HealthKit native availability (only true in native builds on iOS)
   const healthKitAvailable = Platform.OS === 'ios' && HealthKitService.isModuleAvailable();
   const [healthKitAuthorized, setHealthKitAuthorized] = useState(false);
+  
+  // Health Connect availability (Android only)
+  const healthConnectAvailable = Platform.OS === 'android';
+  const [healthConnectAuthorized, setHealthConnectAuthorized] = useState(false);
+  const [healthConnectInstalled, setHealthConnectInstalled] = useState(false);
 
   const loadConnections = useCallback(async () => {
     try {
-      // Beta: Apple Health only. No external wearables connectors.
-      // We keep this function so pull-to-refresh works and future sources can be re-added later.
+      // Check Health Connect status on Android
+      if (Platform.OS === 'android') {
+        const installed = await HealthConnectService.checkHealthConnectInstalled();
+        setHealthConnectInstalled(installed);
+        
+        if (installed) {
+          const permissions = await HealthConnectService.requestHealthConnectPermissions();
+          setHealthConnectAuthorized(permissions);
+        }
+      }
     } catch (err: any) {
+      console.error('Error loading health connections:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -87,20 +102,76 @@ export default function HealthConnectionsScreen() {
     }
   };
 
-  const handleSync = async () => {
-    // If HealthKit is available natively, prefer direct sync
-    if (healthKitAvailable && healthKitAuthorized) {
-      await handleHealthKitSync();
+  // ─── Health Connect sync for Android ─────────────
+  const handleHealthConnectSync = async () => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('Platform Error', 'Health Connect is only available on Android');
       return;
     }
 
     setSyncing(true);
     try {
-      await handleHealthKitSync();
+      // Check if Health Connect is installed
+      const isInstalled = await HealthConnectService.checkHealthConnectInstalled();
+      if (!isInstalled) {
+        Alert.alert(
+          'Health Connect Required',
+          'Please install Health Connect from the Google Play Store to sync your health data.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Learn More', 
+              onPress: () => {
+                // Open Health Connect setup instructions
+                Alert.alert('Setup Instructions', HealthConnectService.getHealthConnectSetupInstructions());
+              }
+            }
+          ]
+        );
+        return;
+      }
+
+      // Request permissions
+      const hasPermissions = await HealthConnectService.requestHealthConnectPermissions();
+      setHealthConnectAuthorized(hasPermissions);
+      
+      if (!hasPermissions) {
+        Alert.alert(
+          'Permission Required',
+          'Please allow Health Connect permissions to sync your health data.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              onPress: () => HealthConnectService.requestHealthConnectPermissionWithGuide()
+            }
+          ]
+        );
+        return;
+      }
+
+      // Sync data to backend
+      await HealthConnectService.syncHealthConnectToBackend(api);
+      
+      Alert.alert(
+        '✅ Health Data Synced',
+        'Your Android Health Connect data has been synced to Mediva!'
+      );
     } catch (err: any) {
-      Alert.alert('Sync Error', err.message || 'Failed to sync');
+      Alert.alert('Sync Error', err.message || 'Failed to sync Health Connect data');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSync = async () => {
+    // Platform-specific sync
+    if (Platform.OS === 'ios' && healthKitAvailable) {
+      await handleHealthKitSync();
+    } else if (Platform.OS === 'android') {
+      await handleHealthConnectSync();
+    } else {
+      Alert.alert('Platform Error', 'Health sync is not available on this platform');
     }
   };
 
@@ -134,19 +205,29 @@ export default function HealthConnectionsScreen() {
         </Text>
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statValue}>1</Text>
+            <Text style={styles.statValue}>{Platform.OS === 'ios' ? '1' : '1'}</Text>
             <Text style={styles.statLabel}>Source</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statValue}>🍎</Text>
-            <Text style={styles.statLabel}>Apple Health</Text>
+            <Text style={styles.statValue}>
+              {Platform.OS === 'ios' ? '🍎' : '🤖'}
+            </Text>
+            <Text style={styles.statLabel}>
+              {Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'}
+            </Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statValue}>
-              {healthKitAvailable ? '✅' : '📱'}
+              {Platform.OS === 'ios' 
+                ? (healthKitAvailable ? '✅' : '📱')
+                : (healthConnectInstalled ? '✅' : '📱')
+              }
             </Text>
             <Text style={styles.statLabel}>
-              {healthKitAvailable ? 'Native' : 'Expo Go'}
+              {Platform.OS === 'ios' 
+                ? (healthKitAvailable ? 'Native' : 'Expo Go')
+                : (healthConnectInstalled ? 'Ready' : 'Setup')
+              }
             </Text>
           </View>
         </View>
@@ -160,14 +241,17 @@ export default function HealthConnectionsScreen() {
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Text style={styles.syncButtonText}>
-              {healthKitAvailable ? '🔄 Sync Apple Health' : 'ℹ️ How to enable Apple Health'}
+              {Platform.OS === 'ios'
+                ? (healthKitAvailable ? '🔄 Sync Apple Health' : 'ℹ️ How to enable Apple Health')
+                : (healthConnectInstalled ? '🔄 Sync Health Connect' : 'ℹ️ How to enable Health Connect')
+              }
             </Text>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Runtime mode banner */}
-      {!healthKitAvailable && Platform.OS === 'ios' && (
+      {/* Runtime mode banner - iOS */}
+      {Platform.OS === 'ios' && !healthKitAvailable && (
         <View style={[styles.bannerCard, { backgroundColor: '#FFF3E0', borderColor: '#FFE0B2' }]}>
           <Text style={styles.bannerIcon}>⚠️</Text>
           <View style={styles.bannerContent}>
@@ -191,7 +275,7 @@ export default function HealthConnectionsScreen() {
         </View>
       )}
 
-      {healthKitAvailable && (
+      {Platform.OS === 'ios' && healthKitAvailable && (
         <View style={[styles.bannerCard, { backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' }]}>
           <Text style={styles.bannerIcon}>✅</Text>
           <View style={styles.bannerContent}>
@@ -200,68 +284,161 @@ export default function HealthConnectionsScreen() {
             </Text>
             <Text style={[styles.bannerText, { color: '#1B5E20' }]}>
               This build can read your actual Apple Health data directly from your iPhone.
-              Tap "Connect Apple Health" to authorize and sync real data.
+              Tap "Sync Apple Health" to authorize and sync real data.
             </Text>
           </View>
         </View>
       )}
 
-      {/* Source cards */}
-      <Text style={styles.sectionTitle}>Apple Health</Text>
-      <View style={styles.sourceCard}>
-        <View style={styles.sourceHeader}>
-          <View style={styles.sourceTitleRow}>
-            <Text style={styles.sourceIcon}>🍎</Text>
-            <View style={styles.sourceTitleCol}>
-              <Text style={styles.sourceName}>Apple Health / Apple Watch</Text>
-              <Text style={styles.sourceLastSync}>
-                {healthKitAvailable ? 'Native build: Real data available' : 'Expo Go: Requires EAS iOS build'}
-              </Text>
-            </View>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <View style={[styles.statusBadge, healthKitAvailable ? styles.statusConnected : styles.statusDisconnected]}>
-              <Text style={[styles.statusText, healthKitAvailable ? styles.statusTextConnected : styles.statusTextDisconnected]}>
-                {healthKitAvailable ? '● Ready' : '○ Not available'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <Text style={styles.sourceDescription}>
-          Mediva reads your Apple Health data (from Apple Watch) and continuously updates your unified health profile.
-        </Text>
-
-        <View style={styles.dataTypesRow}>
-          {['Steps', 'Heart Rate', 'Resting HR', 'HRV', 'Sleep', 'SpO₂', 'Weight', 'Blood Pressure'].map((t) => (
-            <View key={t} style={styles.dataTypeBadge}>
-              <Text style={styles.dataTypeText}>{t}</Text>
-            </View>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={[styles.connectBtn, { backgroundColor: '#111' }, syncing && styles.connectBtnDisabled]}
-          onPress={handleSync}
-          disabled={syncing}
-        >
-          {syncing ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.connectText}>
-              {healthKitAvailable ? '🔄 Sync Apple Health Now' : '📱 Build iOS app to enable HealthKit'}
+      {/* Runtime mode banner - Android */}
+      {Platform.OS === 'android' && !healthConnectInstalled && (
+        <View style={[styles.bannerCard, { backgroundColor: '#FFF3E0', borderColor: '#FFE0B2' }]}>
+          <Text style={styles.bannerIcon}>⚠️</Text>
+          <View style={styles.bannerContent}>
+            <Text style={styles.bannerTitle}>Health Connect Setup Required</Text>
+            <Text style={styles.bannerText}>
+              Health Connect needs to be set up on your device to sync health data.
+              {'\n\n'}To enable <Text style={styles.bold}>Health Connect</Text>:
             </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+            <View style={styles.stepsList}>
+              <Text style={styles.stepItem}>1️⃣  Install Health Connect from Google Play Store</Text>
+              <Text style={styles.stepItem}>2️⃣  Open Health Connect and set it as default</Text>
+              <Text style={styles.stepItem}>3️⃣  Grant permissions in Health Connect settings</Text>
+              <Text style={styles.stepItem}>4️⃣  Return to Mediva and tap "Sync Health Connect"</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {Platform.OS === 'android' && healthConnectInstalled && (
+        <View style={[styles.bannerCard, { backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' }]}>
+          <Text style={styles.bannerIcon}>✅</Text>
+          <View style={styles.bannerContent}>
+            <Text style={[styles.bannerTitle, { color: '#2E7D32' }]}>
+              Health Connect Ready
+            </Text>
+            <Text style={[styles.bannerText, { color: '#1B5E20' }]}>
+              Health Connect is installed and ready. Tap "Sync Health Connect" to authorize and sync your health data from Google Fit or other connected apps.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Source cards - Platform specific */}
+      {Platform.OS === 'ios' && (
+        <>
+          <Text style={styles.sectionTitle}>Apple Health</Text>
+          <View style={styles.sourceCard}>
+            <View style={styles.sourceHeader}>
+              <View style={styles.sourceTitleRow}>
+                <Text style={styles.sourceIcon}>🍎</Text>
+                <View style={styles.sourceTitleCol}>
+                  <Text style={styles.sourceName}>Apple Health / Apple Watch</Text>
+                  <Text style={styles.sourceLastSync}>
+                    {healthKitAvailable ? 'Native build: Real data available' : 'Expo Go: Requires EAS iOS build'}
+                  </Text>
+                </View>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <View style={[styles.statusBadge, healthKitAvailable ? styles.statusConnected : styles.statusDisconnected]}>
+                  <Text style={[styles.statusText, healthKitAvailable ? styles.statusTextConnected : styles.statusTextDisconnected]}>
+                    {healthKitAvailable ? '● Ready' : '○ Not available'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.sourceDescription}>
+              Mediva reads your Apple Health data (from Apple Watch) and continuously updates your unified health profile.
+            </Text>
+
+            <View style={styles.dataTypesRow}>
+              {['Steps', 'Heart Rate', 'Resting HR', 'HRV', 'Sleep', 'SpO₂', 'Weight', 'Blood Pressure'].map((t) => (
+                <View key={t} style={styles.dataTypeBadge}>
+                  <Text style={styles.dataTypeText}>{t}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.connectBtn, { backgroundColor: '#111' }, syncing && styles.connectBtnDisabled]}
+              onPress={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.connectText}>
+                  {healthKitAvailable ? '🔄 Sync Apple Health Now' : '📱 Build iOS app to enable HealthKit'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+
+      {Platform.OS === 'android' && (
+        <>
+          <Text style={styles.sectionTitle}>Health Connect</Text>
+          <View style={styles.sourceCard}>
+            <View style={styles.sourceHeader}>
+              <View style={styles.sourceTitleRow}>
+                <Text style={styles.sourceIcon}>🤖</Text>
+                <View style={styles.sourceTitleCol}>
+                  <Text style={styles.sourceName}>Health Connect / Google Fit</Text>
+                  <Text style={styles.sourceLastSync}>
+                    {healthConnectInstalled ? 'App installed and ready' : 'Setup required'}
+                  </Text>
+                </View>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <View style={[styles.statusBadge, healthConnectInstalled ? styles.statusConnected : styles.statusDisconnected]}>
+                  <Text style={[styles.statusText, healthConnectInstalled ? styles.statusTextConnected : styles.statusTextDisconnected]}>
+                    {healthConnectInstalled ? '● Ready' : '○ Setup'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.sourceDescription}>
+              Mediva reads your Health Connect data (from Google Fit, Samsung Health, and other connected apps) to build your unified health profile.
+            </Text>
+
+            <View style={styles.dataTypesRow}>
+              {['Steps', 'Heart Rate', 'Sleep', 'Distance', 'Calories', 'Weight', 'Blood Pressure', 'Blood Glucose'].map((t) => (
+                <View key={t} style={styles.dataTypeBadge}>
+                  <Text style={styles.dataTypeText}>{t}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.connectBtn, { backgroundColor: '#111' }, syncing && styles.connectBtnDisabled]}
+              onPress={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.connectText}>
+                  {healthConnectInstalled ? '🔄 Sync Health Connect Now' : '📱 Setup Health Connect'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          {healthKitAvailable
-            ? '✅ Native build — real health data available'
-            : '📱 Expo Go — demo data mode'}
+          {Platform.OS === 'ios'
+            ? (healthKitAvailable ? '✅ Native build — real health data available' : '📱 Expo Go — demo data mode')
+            : (healthConnectInstalled ? '✅ Health Connect ready — real health data available' : '📱 Setup Health Connect to enable')
+          }
         </Text>
-        <Text style={styles.footerText}>Apple Health only • Beta</Text>
+        <Text style={styles.footerText}>
+          {Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'} • Unified Health Profile
+        </Text>
       </View>
     </ScrollView>
   );

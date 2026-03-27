@@ -372,17 +372,18 @@ Title (in English only):`;
       } as any);
 
       // Add emergency response
-      const emergencyResponse = `⚠️ **EMERGENCY DETECTED**
+      const emergencyResponse = `I understand this is concerning. Based on what you've described, this could be a serious situation that needs immediate medical attention.
 
-This appears to be a medical emergency. Please take the following actions immediately:
+Please call emergency services right now:
+• India: 108 or 112
+• Other countries: Your local emergency number
 
-1. **Call 108** (India Emergency Services) or your local emergency number
-2. If someone is with you, ask them to call for help
-3. Stay calm and follow any first aid instructions if available
+While you wait for help:
+• Try to stay calm and find a comfortable position
+• If someone is nearby, ask them to stay with you
+• Don't try to drive yourself anywhere
 
-**Do not wait for an AI response. Seek immediate medical attention.**
-
-If you're able to, please share your location with emergency services.`;
+If this isn't actually an emergency, please tell me more about what's happening so I can guide you better. Your safety is the most important thing right now.`;
 
       session.messages.push({
         role: 'assistant',
@@ -685,15 +686,18 @@ If you're able to, please share your location with emergency services.`;
         timestamp: new Date(),
       } as any);
 
-      const emergencyMessage = `**EMERGENCY DETECTED**
+      const emergencyMessage = `I understand this is concerning. Based on what you've described, this could be a serious situation that needs immediate medical attention.
 
-This appears to be a medical emergency. Please:
+Please call emergency services right now:
+• India: 108 or 112
+• Other countries: Your local emergency number
 
-1. Call 108 (India Emergency Services) immediately
-2. If someone is with you, ask them to call for help
-3. Stay calm and follow any first aid instructions if available
+While you wait for help:
+• Try to stay calm and find a comfortable position
+• If someone is nearby, ask them to stay with you
+• Don't try to drive yourself anywhere
 
-Do not wait for an AI response. Seek immediate medical attention.`;
+If this isn't actually an emergency, please tell me more about what's happening so I can guide you better. Your safety is the most important thing right now.`;
 
       session.messages.push({
         role: 'assistant',
@@ -1111,17 +1115,18 @@ RESPONSE FORMAT:
       yield { type: 'emergency', data: JSON.stringify({ isEmergency: true, severity: emergencyCheck.severity || 'EMERGENCY' }) };
 
       // Add emergency response
-      const emergencyResponse = `⚠️ **EMERGENCY DETECTED**
+      const emergencyResponse = `I understand this is concerning. Based on what you've described, this could be a serious situation that needs immediate medical attention.
 
-This appears to be a medical emergency. Please take the following actions immediately:
+Please call emergency services right now:
+• India: 108 or 112
+• Other countries: Your local emergency number
 
-1. **Call 108** (India Emergency Services) or your local emergency number
-2. If someone is with you, ask them to call for help
-3. Stay calm and follow any first aid instructions if available
+While you wait for help:
+• Try to stay calm and find a comfortable position
+• If someone is nearby, ask them to stay with you
+• Don't try to drive yourself anywhere
 
-**Do not wait for an AI response. Seek immediate medical attention.**
-
-If you're able to, please share your location with emergency services.`;
+If this isn't actually an emergency, please tell me more about what's happening so I can guide you better. Your safety is the most important thing right now.`;
 
       // Stream emergency response
       for (const char of emergencyResponse) {
