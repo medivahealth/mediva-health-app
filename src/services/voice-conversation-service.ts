@@ -2,24 +2,32 @@ import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import * as SecureStore from 'expo-secure-store';
 import { io, Socket } from 'socket.io-client';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import { BASE_URL } from './api';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Buffer } from 'buffer';
+import { requestMicrophonePermission, showPermissionRationale } from '../utils/permissions';
 
 export interface VoiceConversationCallbacks {
   onStateChange: (state: VoiceState) => void;
   onTranscript: (text: string, isUser: boolean) => void;
   onError: (error: string) => void;
   onMicLevel?: (level: number) => void; // For orb animation
+  onConnectingProgress?: (stage: string) => void; // For brief unification stages
 }
 
-export type VoiceState = 'idle' | 'connecting' | 'listening' | 'speaking';
+export type VoiceState = 'idle' | 'requesting_permission' | 'connecting' | 'unifying_data' | 'listening' | 'speaking';
 export interface VoiceStartOptions {
   preferredLanguage?: string;
   location?: { lat: number; lng: number; city?: string; country?: string };
   voiceName?: string;
   subtitlesEnabled?: boolean;
+  unifiedHealthData?: {
+    hasAppleHealth?: boolean;
+    hasHealthConnect?: boolean;
+    hasWearables?: boolean;
+    recordCount?: number;
+  };
 }
 
 export class VoiceConversationService {
@@ -49,6 +57,60 @@ export class VoiceConversationService {
     this.callbacks.onStateChange(state);
   }
 
+  /**
+   * Perform brief data unification during connecting state
+   * This analyzes user's health data while connecting
+   */
+  private performBriefUnification(options: VoiceStartOptions) {
+    const healthData = options.unifiedHealthData;
+    
+    if (!healthData) {
+      this.callbacks.onConnectingProgress?.('Getting ready...');
+      return;
+    }
+    
+    // Show brief analysis stages
+    const stages: string[] = [];
+    
+    if (healthData.hasAppleHealth || healthData.hasHealthConnect) {
+      stages.push('Syncing your health data...');
+    }
+    
+    if (healthData.hasWearables) {
+      stages.push('Analyzing wearable data...');
+    }
+    
+    if (healthData.recordCount && healthData.recordCount > 0) {
+      stages.push(`Reviewing ${healthData.recordCount} medical records...`);
+    }
+    
+    if (stages.length === 0) {
+      stages.push('Preparing your consultation...');
+    }
+    
+    // Cycle through stages quickly
+    let stageIndex = 0;
+    const stageInterval = setInterval(() => {
+      if (!this.isActive || this.currentState !== 'unifying_data') {
+        clearInterval(stageInterval);
+        return;
+      }
+      
+      if (stageIndex < stages.length) {
+        this.callbacks.onConnectingProgress?.(stages[stageIndex]);
+        stageIndex++;
+      } else {
+        this.callbacks.onConnectingProgress?.('Connecting to Dr. Mediva...');
+        clearInterval(stageInterval);
+      }
+    }, 400);
+    
+    // Clear interval after all stages or timeout
+    setTimeout(() => {
+      clearInterval(stageInterval);
+    }, stages.length * 400 + 500);
+  }
+
   async startConversation(options: VoiceStartOptions = {}) {
     if (this.isActive) return;
     
@@ -59,17 +121,61 @@ export class VoiceConversationService {
       return;
     }
 
+    // Step 1: Request microphone permission
+    this.setState('requesting_permission');
+    
+    const micPermission = await requestMicrophonePermission();
+    
+    if (!micPermission.granted) {
+      if (micPermission.canAskAgain) {
+        // Show rationale and try again
+        showPermissionRationale(
+          'microphone',
+          async () => {
+            // User accepted rationale, try requesting again
+            const secondAttempt = await requestMicrophonePermission();
+            if (secondAttempt.granted) {
+              this.proceedWithConnection(options, token);
+            } else {
+              this.callbacks.onError('Microphone permission is required for voice chat');
+              this.setState('idle');
+            }
+          },
+          () => {
+            this.callbacks.onError('Microphone permission is required for voice chat');
+            this.setState('idle');
+          }
+        );
+      } else {
+        this.callbacks.onError('Microphone permission denied. Please enable it in settings.');
+        this.setState('idle');
+      }
+      return;
+    }
+    
+    // Permission granted, proceed with connection
+    this.proceedWithConnection(options, token);
+  }
+
+  private async proceedWithConnection(options: VoiceStartOptions, token: string) {
     this.isActive = true;
     this.shouldReconnect = true;
     this.setState('connecting');
+    this.callbacks.onConnectingProgress?.('Connecting to Dr. Mediva...');
+
+    // Brief data unification stage
+    setTimeout(() => {
+      if (this.isActive && this.currentState === 'connecting') {
+        this.setState('unifying_data');
+        this.performBriefUnification(options);
+      }
+    }, 500);
 
     // Socket.io connection using /voice namespace
-    // BASE_URL is like 'http://localhost:3000/api', we need 'http://localhost:3000/voice'
     const apiUrl = BASE_URL.replace(/\/api$/, '');
     const socketUrl = `${apiUrl}/voice`;
     
     console.log('Connecting to voice socket:', socketUrl);
-    console.log('Token exists:', !!token);
     
     this.socket = io(socketUrl, {
       auth: { token: `Bearer ${token}` },
@@ -89,29 +195,32 @@ export class VoiceConversationService {
       this.pingInterval = setInterval(() => {
         this.socket?.emit('ping');
       }, 10000);
-      // Set a timeout for authorization
+      
       this.authTimeout = setTimeout(() => {
-        if (this.isActive && this.currentState === 'connecting') {
+        if (this.isActive && (this.currentState === 'connecting' || this.currentState === 'unifying_data')) {
           console.error('Authorization timeout');
-          this.callbacks.onError('Authorization timeout - please try again');
+          this.callbacks.onError('Connection timeout - please try again');
           this.stopConversation();
         }
-      }, 5000);
+      }, 8000);
     });
 
     this.socket.on('authorized', (data: { userId: string; role: string }) => {
       console.log('Voice socket authorized:', data.userId);
-      // Clear the auth timeout
       if (this.authTimeout) {
         clearTimeout(this.authTimeout);
         this.authTimeout = null;
       }
-      // Now we can start the session
+      
+      // Brief unification complete, start session
+      this.callbacks.onConnectingProgress?.('Almost ready...');
+      
       this.socket?.emit('start_session', {
         preferredLanguage: options.preferredLanguage || 'en',
         location: options.location,
         voiceName: options.voiceName || 'Aoede',
         subtitlesEnabled: options.subtitlesEnabled ?? true,
+        unifiedHealthData: options.unifiedHealthData,
       });
     });
 

@@ -66,7 +66,8 @@ function useIsNarrow(maxWidth = 640) {
 export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAgentProps) {
   const [configError, setConfigError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
-  const [status, setStatus] = useState<'connecting' | 'say something' | 'user talks' | 'ai response'>('connecting');
+  const [connectingStage, setConnectingStage] = useState<string>('Initializing...');
+  const [status, setStatus] = useState<'connecting' | 'unifying' | 'ready' | 'user talks' | 'ai response'>('connecting');
   const [isMuted, setIsMuted] = useState(false);
   const isMutedRef = useRef(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -205,7 +206,40 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
     const ai = new GoogleGenAI({ apiKey });
 
     const baseMedivaInstruction =
-      "You are Mediva, a professional, natural, and empathetic AI doctor. You are strictly proficient in English, Hindi, Telugu, Malayalam, Kannada, Tamil, Bengali, and Marathi. Always respond in the language the user speaks to you. \n\nYour Persona:\n- Act like a real doctor: ask clarifying questions about symptoms, duration, and severity.\n- Provide clear medical advice and prescriptions when appropriate (with a disclaimer to consult a physical doctor).\n- Emergency Protocol: If the user describes a life-threatening emergency (chest pain, severe bleeding, unconsciousness), immediately tell them to call 112 and offer to help find the nearest hospital.\n- Greeting: Start naturally with 'Hey, I'm Mediva, how can I help you today?' or the equivalent in their language.\n- Tone: Professional yet conversational. Avoid being overly robotic. Speak like a human doctor would—warm, attentive, and direct.\n- Do not mention you are an AI unless asked.\n- IMPORTANT: Do not output your internal thinking process, reasoning, or 'Clarifying' notes in the text response. Only output the actual words you are speaking to the user.";
+      `You are Dr. Mediva, an experienced and caring primary care physician with 15+ years of practice. You combine medical expertise with genuine empathy - like a trusted family doctor who knows your history and truly cares about your wellbeing.
+
+CRITICAL RULE: LANGUAGE MATCHING
+- Detect the language the user speaks and respond in the SAME language.
+- Hindi → respond in Hindi, Telugu → Telugu, Tamil → Tamil, Bengali → Bengali, Kannada → Kannada, Marathi → Marathi.
+- Use respectful forms: Hindi "Aap", Telugu "Meeru", etc.
+- Medical terms can be in English when necessary, but explain in the user's language.
+
+CONVERSATION STYLE (Be a real doctor, not a chatbot)
+- Warm, professional yet approachable - like sitting across from your doctor
+- Start naturally: "Hello! I'm Dr. Mediva. Tell me what's going on today." or "Hi there, how can I help you today?"
+- Never use robotic phrases like "As an AI" or "I'm a virtual assistant"
+- Use natural doctor-patient conversation flow:
+  * Acknowledge concerns: "I understand that can be worrying"
+  * Show you're listening: "That's helpful to know", "I see", "Good to know"
+  * Build rapport: "Thanks for sharing that with me"
+- Ask focused follow-up questions one at a time or in small groups (2 max)
+- Show you're analyzing their data when available: "I can see from your recent readings that..."
+- Be reassuring without dismissing concerns
+- When you don't have all information: "Let me think about what else we need to know"
+- Use phrases that show medical expertise: "In my experience", "What we typically see", "The research suggests"
+- NEVER use phrases like "As an AI language model", "I'm just a chatbot", or any AI terminology
+
+MEDICAL APPROACH:
+1. You are EXCLUSIVELY a medical doctor. For non-medical topics, gently redirect to health.
+2. When uncertain: "I want to be careful here - let me recommend you see a doctor for this"
+3. Never give definitive diagnoses - always "possible causes", "what we're considering"
+4. Emergency Protocol: If the user describes a life-threatening emergency (chest pain, severe bleeding, unconsciousness), immediately tell them to call 108/112 and offer to help find the nearest hospital.
+5. Provide clear medical advice (with a disclaimer to consult a physical doctor for confirmation).
+6. Be conversational and end-to-end - don't overwhelm with information, guide them step by step.
+
+NEVER mention suicide, self-harm, or use discouraging language. Always be supportive and constructive.
+
+IMPORTANT: Do not output your internal thinking process, reasoning, or "Clarifying" notes in the text response. Only output the actual words you are speaking to the user.`;
 
     const appBrief = readMedivaVoiceBrief();
     const systemInstruction = appBrief
@@ -231,16 +265,42 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
             clearTimeout(connectTimeoutRef.current);
             connectTimeoutRef.current = null;
           }
-          setIsConnecting(false);
-          setStatus('say something');
-          if (!audioContextRef.current) {
-            initializeAudio();
-          }
+          
+          // Simulate brief unification stages
+          const stages = [
+            'Connecting to Dr. Mediva...',
+            'Syncing your health data...',
+            'Analyzing your profile...',
+            'Ready for consultation',
+          ];
+          
+          let stageIndex = 0;
+          setConnectingStage(stages[0]);
+          setStatus('unifying');
+          
+          const stageInterval = setInterval(() => {
+            stageIndex++;
+            if (stageIndex < stages.length - 1) {
+              setConnectingStage(stages[stageIndex]);
+            } else {
+              clearInterval(stageInterval);
+              setConnectingStage('');
+              setIsConnecting(false);
+              setStatus('ready');
+              if (!audioContextRef.current) {
+                initializeAudio();
+              }
+            }
+          }, 600);
         },
         onmessage: async (message: LiveServerMessage) => {
           // Detect user speech from transcription if available
           if ((message as any).serverContent?.inputAudioTranscription) {
             setStatus('user talks');
+          }
+
+          if (message.serverContent?.modelTurn?.parts && status !== 'ready') {
+            setStatus('ready');
           }
 
           if (message.serverContent?.modelTurn?.parts) {
@@ -282,7 +342,7 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
           }
 
           if (message.serverContent?.turnComplete) {
-            setStatus('say something');
+            setStatus('ready');
             isNewTurnRef.current = true;
           }
         },
@@ -371,12 +431,14 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
     isMutedRef.current = nextMuted;
   };
 
-  const docked = settings.subtitles && !!aiTranscript;
+  const docked = settings.subtitles && !!aiTranscript && status !== 'connecting' && status !== 'unifying';
   const bubbleGlowClass = isMuted
     ? 'talk-bubble-wrap--muted'
     : status === 'ai response'
       ? 'talk-bubble-wrap--active'
-      : 'talk-bubble-wrap--idle';
+      : status === 'connecting' || status === 'unifying'
+        ? 'talk-bubble-wrap--connecting'
+        : 'talk-bubble-wrap--idle';
 
   return (
     <motion.div
@@ -429,7 +491,27 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden px-3 pt-2 sm:px-5 sm:pt-4 md:px-8 md:pt-8">
         <div className="flex max-h-[min(36vh,240px)] min-h-0 shrink-0 flex-col items-center overflow-y-auto overscroll-contain sm:max-h-[min(42vh,320px)] md:max-h-none">
           <AnimatePresence mode="wait">
-            {settings.subtitles && aiTranscript && (
+            {(status === 'connecting' || status === 'unifying') && (
+              <motion.div
+                key="connecting"
+                initial={{ opacity: 0, y: -12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                className="w-full max-w-2xl space-y-2 px-2 text-center sm:space-y-3 sm:px-4"
+                style={{
+                  fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+                  fontWeight: 300,
+                }}
+              >
+                <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-amber-400 sm:text-[10px] sm:tracking-[0.3em]">
+                  Connecting
+                </p>
+                <p className="text-balance text-lg leading-snug tracking-wide text-white sm:text-xl md:text-2xl">
+                  {connectingStage}
+                </p>
+              </motion.div>
+            )}
+            {settings.subtitles && aiTranscript && status !== 'connecting' && status !== 'unifying' && (
               <motion.div
                 key="transcript"
                 initial={{ opacity: 0, y: -12 }}
@@ -442,7 +524,7 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
                 }}
               >
                 <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-emerald-500 sm:text-[10px] sm:tracking-[0.3em]">
-                  Mediva Speaking
+                  Dr. Mediva Speaking
                 </p>
                 <p className="text-balance text-lg leading-snug tracking-wide text-white sm:text-2xl md:text-3xl lg:text-4xl">
                   {aiTranscript}
@@ -452,8 +534,8 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
           </AnimatePresence>
         </div>
 
-        {/* Talk bubble asset — responsive width, docked position on narrow screens */}
-        <div className="relative flex min-h-[min(42vh,260px)] flex-1 items-center justify-center py-2 sm:min-h-0 sm:py-4">
+        {/* Talk bubble asset — responsive width, docked position on narrow screens, moved down */}
+        <div className="relative flex min-h-[min(48vh,300px)] flex-1 items-center justify-center py-4 sm:min-h-0 sm:py-6 mt-8 sm:mt-12">
           <motion.div
             className="flex w-[min(90vw,300px)] items-center justify-center sm:w-[min(82vw,340px)] md:w-[min(72vw,400px)] lg:max-w-[440px]"
             animate={
@@ -469,8 +551,8 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
                         ? [1, 1.045, 1]
                         : status === 'user talks'
                           ? [1, 1.03, 1]
-                          : status === 'connecting'
-                            ? [1, 1.02, 1]
+                          : status === 'connecting' || status === 'unifying'
+                            ? [1, 1.025, 1]
                             : [1, 1.018, 1],
                     x: 0,
                     y: 0,
@@ -480,7 +562,7 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
               docked
                 ? { type: 'spring', damping: 28, stiffness: 140 }
                 : {
-                    duration: status === 'ai response' ? 1.65 : 2.4,
+                    duration: status === 'ai response' ? 1.65 : status === 'connecting' || status === 'unifying' ? 1.8 : 2.4,
                     repeat: Infinity,
                     ease: 'easeInOut',
                   }
@@ -514,7 +596,13 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
             }`}
           />
           <span className="hidden min-[360px]:inline text-[9px] font-bold uppercase tracking-wider text-zinc-400 sm:text-[10px] sm:tracking-widest">
-            {configError ? 'No API key' : status === 'connecting' ? 'Connecting' : 'Say something'}
+            {configError 
+              ? 'No API key' 
+              : isConnecting 
+                ? connectingStage 
+                : status === 'ready' 
+                  ? 'Say something' 
+                  : 'Listening'}
           </span>
           
           {/* Visualizer Bars */}
@@ -523,11 +611,20 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
               <motion.div
                 key={i}
                 animate={{
-                  height: status === 'ai response' ? [8, 16, 8] : 8,
+                  height: 
+                    status === 'ai response' 
+                      ? [8, 16, 8] 
+                      : status === 'connecting' || status === 'unifying'
+                        ? [6, 10, 6]
+                        : 8,
+                  opacity:
+                    status === 'connecting' || status === 'unifying'
+                      ? [0.4, 1, 0.4]
+                      : 1,
                 }}
                 transition={{
                   repeat: Infinity,
-                  duration: 0.5,
+                  duration: status === 'connecting' || status === 'unifying' ? 1 : 0.5,
                   delay: i * 0.1,
                 }}
                 className="w-0.5 bg-white/40 rounded-full"

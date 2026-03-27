@@ -17,6 +17,7 @@ import { ContextModule } from './context/context.module';
 import { PrescriptionModule } from './prescription/prescription.module';
 import { LabModule } from './lab/lab.module';
 import { PharmacyModule } from './pharmacy/pharmacy.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { HealthzController } from './healthz.controller';
 
 @Module({
@@ -47,6 +48,7 @@ import { HealthzController } from './healthz.controller';
     PrescriptionModule,
     LabModule,
     PharmacyModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

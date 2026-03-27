@@ -82,29 +82,120 @@ export class ChatService {
     return lines.length ? lines.join('\n') : undefined;
   }
 
-  /** Short chat list title — AI-generated from first exchange */
+  /** Short chat list title — AI-generated from first exchange, always in proper English */
   private async generateAiChatTitle(userMessage: string, assistantExcerpt: string): Promise<string> {
     const cleanedUser = userMessage.replace(/\n/g, ' ').trim().slice(0, 450);
     const cleanedAsst = assistantExcerpt.replace(/\n/g, ' ').trim().slice(0, 280);
-    const prompt = `Name this medical support chat. Output ONLY a short title (max 42 characters), no quotes, no emoji. Use the same language as the user's message when it is clearly not English.
-Patient said: ${cleanedUser}
-Assistant begins: ${cleanedAsst}
-Title:`;
+    
+    const prompt = `Generate a short, professional chat title in ENGLISH based on this medical conversation.
+
+Requirements:
+- Maximum 40 characters
+- Professional medical tone
+- Use proper English only (never Hindi, Telugu, etc.)
+- No emojis
+- No quotes in output
+- Make it specific to the medical topic
+
+Examples:
+- Patient: "I have chest pain" → Title: "Chest Pain Assessment"
+- Patient: "My BP is high" → Title: "High Blood Pressure Consultation"
+- Patient: "Fever and cough" → Title: "Fever & Respiratory Symptoms"
+- Patient: "Skin rash on arm" → Title: "Dermatology Consultation"
+- Patient: "Diabetes medication" → Title: "Diabetes Management"
+
+Patient message: ${cleanedUser}
+Doctor response preview: ${cleanedAsst}
+
+Title (in English only):`;
+
     try {
       const raw = await this.openRouter.chat(
         [{ role: 'user', content: prompt }] as OpenAI.Chat.ChatCompletionMessageParam[],
         ModelTier.FAST,
-        { temperature: 0.25, maxTokens: 48 },
+        { temperature: 0.3, maxTokens: 50 },
       );
-      const t = String(raw || '')
+      
+      let title = String(raw || '')
         .replace(/^["'\s]+|["'\s]+$/g, '')
         .split('\n')[0]
         .trim();
-      if (t.length >= 3) return t.slice(0, 85);
+      
+      // Ensure English only by removing non-ASCII characters except common punctuation
+      title = title.replace(/[^\x00-\x7F]/g, '').trim();
+      
+      if (title.length >= 3 && title.length <= 60) {
+        return title;
+      }
     } catch (e) {
-      this.logger.warn(`AI chat title failed: ${e}`);
+      this.logger.warn(`AI chat title generation failed: ${e}`);
     }
-    return this.generateSummary(userMessage);
+    
+    // Fallback: Generate title from keywords in user message
+    return this.generateFallbackTitle(userMessage);
+  }
+
+  /** Fallback title generator using keywords */
+  private generateFallbackTitle(message: string): string {
+    const lowerMsg = message.toLowerCase();
+    
+    // Common medical keywords mapping
+    const keywordMap: Record<string, string> = {
+      'chest pain': 'Chest Pain Consultation',
+      'heart': 'Heart Health Consultation',
+      'blood pressure': 'Blood Pressure Consultation',
+      'bp': 'Blood Pressure Consultation',
+      'diabetes': 'Diabetes Consultation',
+      'sugar': 'Blood Sugar Consultation',
+      'fever': 'Fever Assessment',
+      'cough': 'Respiratory Consultation',
+      'cold': 'Cold & Flu Consultation',
+      'headache': 'Headache Assessment',
+      'migraine': 'Migraine Consultation',
+      'stomach': 'Digestive Issues',
+      'abdomen': 'Abdominal Consultation',
+      'pain': 'Pain Assessment',
+      'skin': 'Dermatology Consultation',
+      'rash': 'Skin Condition Assessment',
+      'allergy': 'Allergy Consultation',
+      'eye': 'Eye Care Consultation',
+      'ear': 'ENT Consultation',
+      'throat': 'Throat Assessment',
+      'dental': 'Dental Consultation',
+      'tooth': 'Dental Consultation',
+      'mental': 'Mental Health Consultation',
+      'anxiety': 'Anxiety Consultation',
+      'depression': 'Mental Health Support',
+      'stress': 'Stress Management',
+      'sleep': 'Sleep Consultation',
+      'weight': 'Weight Management',
+      'diet': 'Nutrition Consultation',
+      'exercise': 'Fitness Consultation',
+      'pregnancy': 'Pregnancy Consultation',
+      'period': 'Women\'s Health Consultation',
+      'medicine': 'Medication Consultation',
+      'medication': 'Medication Review',
+      'prescription': 'Prescription Consultation',
+      'test': 'Lab Test Review',
+      'report': 'Medical Report Review',
+      'x-ray': 'Imaging Review',
+      'mri': 'Imaging Consultation',
+      'ct': 'Imaging Consultation',
+      'vaccine': 'Vaccination Consultation',
+      'covid': 'COVID-19 Consultation',
+    };
+    
+    // Check for keywords
+    for (const [keyword, title] of Object.entries(keywordMap)) {
+      if (lowerMsg.includes(keyword)) {
+        return title;
+      }
+    }
+    
+    // Generic fallback based on first few words
+    const words = message.split(' ').slice(0, 4).join(' ');
+    const truncated = words.length > 35 ? words.substring(0, 32) + '...' : words;
+    return truncated || 'Medical Consultation';
   }
 
   /** Compact context for Mediva Voice (WebView) — merged into Gemini Live instructions */

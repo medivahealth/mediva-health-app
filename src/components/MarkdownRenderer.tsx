@@ -4,10 +4,20 @@ import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES } from '../theme';
 
+interface ArticleCard {
+  id: string;
+  title: string;
+  summary?: string;
+  category?: string;
+  url?: string;
+}
+
 interface Props {
   content: string;
   onFollowUp?: (question: string) => void;
   variant?: 'default' | 'chat';
+  articles?: ArticleCard[];
+  onArticlePress?: (article: ArticleCard) => void;
 }
 
 const TRUSTED_MEDICAL_DOMAINS = [
@@ -148,7 +158,7 @@ function renderInline(
   return elements.length > 0 ? elements : [<Text key={`${key}-full`} style={stylesObj.text}>{cleanedText}</Text>];
 }
 
-export default function MarkdownRenderer({ content, onFollowUp, variant = 'default' }: Props) {
+export default function MarkdownRenderer({ content, onFollowUp, variant = 'default', articles, onArticlePress }: Props) {
   const isChat = variant === 'chat';
   const primaryLight = isChat ? '#FFFFFF' : COLORS.primaryLight;
   const primary = isChat ? '#FFFFFF' : COLORS.primary;
@@ -191,6 +201,12 @@ export default function MarkdownRenderer({ content, onFollowUp, variant = 'defau
     followUpSection: { marginTop: 12, backgroundColor: isChat ? '#0B1220' : '#F5F5F5', borderRadius: 12, padding: 12 },
     followUpBtn: { backgroundColor: isChat ? '#1F2937' : '#FFFFFF', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6 },
     followUpText: { fontSize: SIZES.sm, color: primary, fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, lineHeight: 18 },
+    articlesSection: { marginTop: 12 },
+    articleCard: { backgroundColor: isChat ? '#1F2937' : '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: COLORS.primary },
+    articleTitle: { fontSize: 14, color: primary, fontFamily: isChat ? 'HelveticaNeue' : FONTS.bold, lineHeight: 20, marginBottom: 4 },
+    articleSummary: { fontSize: 12, color: secondary, fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, lineHeight: 18 },
+    articleCategory: { fontSize: 10, color: COLORS.primary, fontFamily: isChat ? 'HelveticaNeue' : FONTS.bold, marginBottom: 6, textTransform: 'uppercase' },
+    articleReadMore: { fontSize: 11, color: linkColor, fontFamily: isChat ? 'HelveticaNeue-Light' : FONTS.regular, marginTop: 8 },
   });
   const cleaned = stripSeverityTag(content);
   const sourceMap = extractSourceMap(cleaned);
@@ -297,6 +313,29 @@ export default function MarkdownRenderer({ content, onFollowUp, variant = 'defau
           {followUps.map((q, idx) => (
             <TouchableOpacity key={idx} style={styles.followUpBtn} onPress={() => onFollowUp?.(q)} activeOpacity={0.7}>
               <Text style={styles.followUpText}>{q}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      {/* Article Cards section */}
+      {articles && articles.length > 0 && (
+        <View style={styles.articlesSection}>
+          <Text style={styles.sectionTitle}>Recommended Articles</Text>
+          {articles.map((article, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={styles.articleCard}
+              onPress={() => onArticlePress?.(article)}
+              activeOpacity={0.7}
+            >
+              {article.category && (
+                <Text style={styles.articleCategory}>{article.category}</Text>
+              )}
+              <Text style={styles.articleTitle} numberOfLines={2}>{article.title}</Text>
+              {article.summary && (
+                <Text style={styles.articleSummary} numberOfLines={2}>{article.summary}</Text>
+              )}
+              <Text style={styles.articleReadMore}>Tap to read more →</Text>
             </TouchableOpacity>
           ))}
         </View>
