@@ -13,16 +13,13 @@ import {
   Image,
   ImageBackground,
   Animated,
-  Share,
   Alert,
   Dimensions,
   Modal,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as Speech from 'expo-speech';
 import * as SecureStore from 'expo-secure-store';
-import * as Clipboard from 'expo-clipboard';
 import * as Location from 'expo-location';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { io, Socket } from 'socket.io-client';
@@ -77,7 +74,6 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
   const [pendingAttachments, setPendingAttachments] = useState<Array<{ uri: string; name: string; type: string }>>([]);
   const MAX_ATTACHMENTS = 5;
   const [isRecording, setIsRecording] = useState(false);
-  const [speakingMsgIdx, setSpeakingMsgIdx] = useState<number | null>(null);
   const [thinkingStatus, setThinkingStatus] = useState<string>('');
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [emergencyDetected, setEmergencyDetected] = useState<{ isEmergency: boolean; severity?: 'EMERGENCY' | 'HIGH' } | null>(null);
@@ -416,13 +412,6 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
       scrollRef.current?.scrollToEnd({ animated: true });
     }
   }, [streamingContent, loading, isStreaming]);
-
-  /* Stop speech when leaving */
-  useEffect(() => {
-    return () => {
-      Speech.stop();
-    };
-  }, []);
 
   /* ─── Send message ─── */
   const sendMessage = async (text: string) => {
@@ -813,90 +802,11 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
     }
   };
 
-  /* ─── Read Aloud (TTS) ─── */
-  const handleReadAloud = (content: string, idx: number) => {
-    if (speakingMsgIdx === idx) {
-      Speech.stop();
-      setSpeakingMsgIdx(null);
-      return;
-    }
-    // Strip markdown for TTS
-    const plain = sanitizeAiText(content)
-      .replace(/<!--.*?-->/g, '')
-      .replace(/#{1,3}\s/g, '')
-      .replace(/\*\*(.+?)\*\*/g, '$1')
-      .replace(/\*(.+?)\*/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/---[\s\S]*$/m, '') // strip follow-up section
-      .replace(/\|/g, ' ')
-      .replace(/[-*•]/g, '')
-      .trim();
-
-    setSpeakingMsgIdx(idx);
-    // Use saved voice preference or fallback to language-based locale
-    const langTuning: Record<string, { rate: number; pitch: number; locale: string }> = {
-      en: { rate: 0.95, pitch: 1.0, locale: 'en-IN' },
-      hi: { rate: 0.9, pitch: 0.98, locale: 'hi-IN' },
-      mr: { rate: 0.9, pitch: 0.98, locale: 'mr-IN' },
-      te: { rate: 0.88, pitch: 1.0, locale: 'te-IN' },
-      bn: { rate: 0.9, pitch: 0.98, locale: 'bn-IN' },
-      kn: { rate: 0.88, pitch: 1.0, locale: 'kn-IN' },
-      ta: { rate: 0.88, pitch: 1.0, locale: 'ta-IN' },
-    };
-    const tuning = langTuning[preferredLang] || langTuning.en;
-
-    Speech.speak(plain, {
-      language: tuning.locale || voiceLocale,
-      rate: tuning.rate,
-      pitch: tuning.pitch,
-      volume: 1.0,
-      onDone: () => setSpeakingMsgIdx(null),
-      onStopped: () => setSpeakingMsgIdx(null),
-      onError: () => setSpeakingMsgIdx(null),
-    });
-  };
-
   /* ─── New Chat ─── */
   const handleNewChat = () => {
-    Speech.stop();
-    setSpeakingMsgIdx(null);
     setDragTimestamp(null);
     setSuggestedPrompts(DEFAULT_SUGGESTED_PROMPTS);
     clearChat();
-  };
-
-  /* ─── Like / Dislike feedback on AI messages ─── */
-  const [feedbackMap, setFeedbackMap] = useState<Record<number, string>>({});
-
-  // Initialize feedbackMap from loaded messages (when opening a history session)
-  useEffect(() => {
-    const map: Record<number, string> = {};
-    messages.forEach((msg, idx) => {
-      if (msg.role === 'assistant' && msg.feedback) {
-        map[idx] = msg.feedback;
-      }
-    });
-    setFeedbackMap(map);
-  }, [messages.length]);
-
-  const handleFeedback = async (msgIndex: number, type: 'like' | 'dislike') => {
-    const current = feedbackMap[msgIndex] || '';
-    const newFeedback = current === type ? '' : type;
-
-    // Optimistic UI update
-    setFeedbackMap((prev) => ({ ...prev, [msgIndex]: newFeedback }));
-
-    // Send to backend
-    if (currentSessionId) {
-      try {
-        const res = await chatService.messageFeedback(currentSessionId, msgIndex, type);
-        setFeedbackMap((prev) => ({ ...prev, [msgIndex]: res.feedback }));
-      } catch {
-        // Revert on failure
-        setFeedbackMap((prev) => ({ ...prev, [msgIndex]: current }));
-      }
-    }
   };
 
   /* ─── Message Actions ─── */
@@ -940,22 +850,6 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
       .replace(/\|/g, ' ')
       .replace(/[-*•]/g, '')
       .trim();
-
-  const handleCopy = async (content: string) => {
-    const plain = stripMarkdownPlain(content);
-    await Clipboard.setStringAsync(plain);
-    Alert.alert('Copied', 'Message copied to clipboard');
-  };
-
-  const handleShare = async (content: string) => {
-    const plain = stripMarkdownPlain(content);
-    try {
-      const workflowLine = currentSession
-        ? `\n\nCase status: ${getDoctorWorkflowStatusLabel(currentSession)}`
-        : '';
-      await Share.share({ message: `From Mediva:\n\n${plain}${workflowLine}` });
-    } catch { }
-  };
 
   const handleFollowUp = (question: string) => {
     setInput(question);
@@ -1015,45 +909,6 @@ export default function ChatScreen({ onNavigate }: ChatScreenProps) {
           )}
         </View>
 
-        {/* Actions */}
-        <View style={s.actionRow}>
-          {/* Like */}
-          <TouchableOpacity
-            style={s.actionBtn}
-            onPress={() => handleFeedback(idx, 'like')}
-          >
-            <Ionicons
-              name={(feedbackMap[idx] || msg.feedback) === 'like' ? 'thumbs-up' : 'thumbs-up-outline'}
-              size={16}
-              color="#9CA3AF"
-            />
-          </TouchableOpacity>
-          {/* Dislike */}
-          <TouchableOpacity
-            style={s.actionBtn}
-            onPress={() => handleFeedback(idx, 'dislike')}
-          >
-            <Ionicons
-              name={(feedbackMap[idx] || msg.feedback) === 'dislike' ? 'thumbs-down' : 'thumbs-down-outline'}
-              size={16}
-              color="#9CA3AF"
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.actionBtn} onPress={() => handleCopy(msg.content)}>
-          <Ionicons name="copy-outline" size={15} color="#9CA3AF" />
-          </TouchableOpacity>
-          <TouchableOpacity style={s.actionBtn} onPress={() => handleShare(msg.content)}>
-          <Ionicons name="share-outline" size={15} color="#9CA3AF" />
-          </TouchableOpacity>
-          <TouchableOpacity style={s.actionBtn} onPress={() => handleReadAloud(msg.content, idx)}>
-            <Ionicons
-              name={speakingMsgIdx === idx ? 'stop-circle-outline' : 'volume-high-outline'}
-              size={15}
-            color="#9CA3AF"
-            />
-          </TouchableOpacity>
-        </View>
       </View>
     );
   };
@@ -1829,19 +1684,6 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: "HelveticaNeue-Light",
-  },
-  actionRow: {
-    flexDirection: 'row',
-    marginTop: 8,
-    paddingLeft: 2,
-    gap: 2,
-  },
-  actionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   actionDivider: {
     width: 1,
