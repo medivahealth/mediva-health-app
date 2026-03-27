@@ -73,8 +73,17 @@ export default function App() {
   const fetchUserProfile = useCallback(() => {
     setProfileLoadError(null);
     import('./src/services/auth').then(({ default: authService }) => {
-      authService
-        .getProfile()
+      const getProfileWithRetry = async () => {
+        try {
+          return await authService.getProfile();
+        } catch {
+          // One quick retry handles transient cold-start/network hiccups.
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          return authService.getProfile();
+        }
+      };
+
+      getProfileWithRetry()
         .then((profile) => setUser(profile))
         .catch((err: unknown) => {
           const message =
@@ -194,8 +203,8 @@ export default function App() {
         ) : (
           <>
             <ActivityIndicator size="large" color="#111" style={{ marginTop: 20 }} />
-            <Text style={styles.loadingText}>Setting up your account...</Text>
-            <Text style={styles.loadingHint}>Loading your profile from the server…</Text>
+            <Text style={styles.loadingText}>Signing you in...</Text>
+            <Text style={styles.loadingHint}>Preparing your profile…</Text>
           </>
         )}
       </SafeAreaView>

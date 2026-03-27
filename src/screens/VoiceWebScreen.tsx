@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Platform,
   BackHandler,
+  Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,8 +47,10 @@ type Props = {
 export default function VoiceWebScreen({ onClose }: Props) {
   const uri = resolveVoiceWebUrl();
   const webUri = uri ? voiceUrlWithEmbed(uri) : '';
+  const isExpoGo = Constants.appOwnership === 'expo';
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [micDenied, setMicDenied] = useState(false);
   /** null = still fetching /chat/voice-brief; string = ready (may be empty) */
   const [voiceBrief, setVoiceBrief] = useState<string | null>(null);
   const webRef = useRef<WebView>(null);
@@ -55,7 +58,18 @@ export default function VoiceWebScreen({ onClose }: Props) {
   // Prime native mic permission (Android especially); WKWebView still requires https for getUserMedia on iOS.
   useEffect(() => {
     if (!uri) return;
-    void requestRecordingPermissionsAsync();
+    (async () => {
+      try {
+        const result = await requestRecordingPermissionsAsync();
+        if (!result.granted) {
+          setMicDenied(true);
+        } else {
+          setMicDenied(false);
+        }
+      } catch {
+        setMicDenied(true);
+      }
+    })();
   }, [uri]);
 
   // Load unified patient + monitoring context before WebView runs (Gemini reads window.__MEDIVA_VOICE_BRIEF__)
@@ -189,6 +203,24 @@ export default function VoiceWebScreen({ onClose }: Props) {
           </View>
         )}
 
+        {isExpoGo && !loadError && (
+          <View style={styles.errorOverlay}>
+            <Text style={styles.errorTitle}>Voice needs a development build</Text>
+            <Text style={styles.errorBody}>
+              You are running in Expo Go. Voice microphone in embedded WebView can fail in Expo Go.
+            </Text>
+            <Text style={styles.errorHint}>
+              Build and run a dev client, then test again:{"\n"}
+              1) npx expo run:android or npx expo run:ios{"\n"}
+              2) npx expo start --dev-client{"\n"}
+              3) Open the app from the dev build
+            </Text>
+            <TouchableOpacity style={styles.backBtn} onPress={onClose}>
+              <Text style={styles.backBtnText}>Back to chat</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {loadError && (
           <View style={styles.errorOverlay}>
             <Text style={styles.errorTitle}>Could not load voice page</Text>
@@ -203,6 +235,24 @@ export default function VoiceWebScreen({ onClose }: Props) {
             </Text>
             <TouchableOpacity style={styles.retryBtn} onPress={() => webRef.current?.reload()}>
               <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.backBtn} onPress={onClose}>
+              <Text style={styles.backBtnText}>Back to chat</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {micDenied && !loadError && (
+          <View style={styles.errorOverlay}>
+            <Text style={styles.errorTitle}>Microphone permission required</Text>
+            <Text style={styles.errorBody}>
+              Mediva Voice needs microphone access for two-way conversation.
+            </Text>
+            <Text style={styles.errorHint}>
+              Enable microphone access for this app in device settings, then reopen Voice.
+            </Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => Linking.openSettings()}>
+              <Text style={styles.retryText}>Open settings</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.backBtn} onPress={onClose}>
               <Text style={styles.backBtnText}>Back to chat</Text>

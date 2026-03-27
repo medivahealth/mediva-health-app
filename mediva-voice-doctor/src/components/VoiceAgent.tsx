@@ -130,6 +130,11 @@ export default function VoiceAgent({ onClose: _onClose, embed = false }: VoiceAg
       processorRef.current.connect(audioContextRef.current.destination);
     } catch (err) {
       console.error('Audio initialization failed:', err);
+      setConfigError(
+        'Microphone access failed. Allow microphone permission in your browser/app settings, then reopen voice.',
+      );
+      setIsConnecting(false);
+      setStatus('say something');
     }
   };
 
